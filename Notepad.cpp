@@ -39,9 +39,27 @@ inline void EditReplaceHandle(HWND hEdit, HLOCAL hMem)
     Edit_SetHandle(hEdit, hMem);
 }
 
-inline void EditGetSel(HWND hEdit, LPDWORD pSelStart, LPDWORD pSelend)
+inline void EditGetSel(HWND hEdit, LPDWORD pSelStart, LPDWORD pSelEnd)
 {
-    SendMessage(hEdit, EM_GETSEL, (WPARAM) pSelStart, (LPARAM) pSelend);
+    SendMessage(hEdit, EM_GETSEL, (WPARAM) pSelStart, (LPARAM) pSelEnd);
+}
+
+inline DWORD EditGetCursor(HWND hEdit)
+{
+    // NOTE There is no message to get the cursor position
+    // This works by unselecting the reselecting
+    SetWindowRedraw(hEdit, FALSE);
+    DWORD nSelStart, nSelend;
+    EditGetSel(hEdit, &nSelStart, &nSelend);
+    Edit_SetSel(hEdit, -1, -1);
+    DWORD nCursor;
+    EditGetSel(hEdit, &nCursor, nullptr);
+    if (nCursor == nSelStart)
+        Edit_SetSel(hEdit, nSelend, nSelStart);
+    else
+        Edit_SetSel(hEdit, nSelStart, nSelend);
+    SetWindowRedraw(hEdit, TRUE);
+    return nCursor;
 }
 
 inline void EditSetLimitText(HWND hEdit, int nSize)
@@ -283,15 +301,22 @@ BOOL CheckSave(HWND hWnd, HWND hEdit)
 
 void UpdateCursorInfo(HWND hEdit, HWND hStatus)
 {
-    if (hStatus != NULL)
+    static bool bIn = false;    // Stop infinite loop from EditGetCursor changing selection
+    static DWORD dwOldCursor = 0;
+    if (hStatus != NULL && !bIn)
     {
-        DWORD dwSelStart, dwSelEnd;
-        EditGetSel(hEdit, &dwSelStart, &dwSelEnd);
-        DWORD dwLine = Edit_LineFromChar(hEdit, dwSelStart);
-        DWORD dwLineIndex = Edit_LineIndex(hEdit, dwLine);
-        TCHAR sBuffer[MAX_LOADSTRING];
-        _sntprintf_s(sBuffer, ARRAYSIZE(sBuffer), g_szLineCol, dwLine + 1, dwSelStart - dwLineIndex + 1);
-        StatusSetText(hStatus, 1, 0, sBuffer);
+        bIn = true;
+        DWORD dwCursor = EditGetCursor(hEdit);
+        if (dwOldCursor != dwCursor)
+        {
+            dwOldCursor = dwCursor;
+            DWORD dwLine = Edit_LineFromChar(hEdit, dwCursor);
+            DWORD dwLineIndex = Edit_LineIndex(hEdit, dwLine);
+            TCHAR sBuffer[MAX_LOADSTRING];
+            _sntprintf_s(sBuffer, ARRAYSIZE(sBuffer), g_szLineCol, dwLine + 1, dwCursor - dwLineIndex + 1);
+            StatusSetText(hStatus, 1, 0, sBuffer);
+        }
+        bIn = false;
     }
 }
 
@@ -306,6 +331,7 @@ LRESULT CALLBACK EditExProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, 
     case WM_PASTE:
     case WM_KEYDOWN:
     case WM_LBUTTONDOWN:
+    case WM_MOUSEMOVE:
         {
             HWND hParent = GetParent(hWnd);
             HWND hStatus = GetDlgItem(hParent, IDC_STATUS);;
@@ -334,6 +360,7 @@ void PositionWindows(HWND hWnd, HWND hEdit, HWND hStatus)
         int r = rcClient.right - rcClient.left - 200;
         int Parts[] = { r, -1 };
         StatusSetParts(hStatus, ARRAYSIZE(Parts), Parts);
+        UpdateCursorInfo(hEdit, hStatus);
     }
 }
 
@@ -357,7 +384,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             if (bStatus)
                 hStatus = CreateStatusControl(hWnd);
             SetWindowSubclass(hEdit, EditExProc, 0, 0);
-            UpdateCursorInfo(hEdit, hStatus);
 
             return hEdit != NULL ? 0 : -1;
         }
@@ -430,9 +456,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 break;
             case ID_EDIT_GOTO:
                 {
-                    DWORD dwSelStart, dwSelEnd;
-                    EditGetSel(hEdit, &dwSelStart, &dwSelEnd);
-                    DWORD dwLine = Edit_LineFromChar(hEdit, dwSelStart) + 1;
+                    DWORD dwCursor = EditGetCursor(hEdit);
+                    DWORD dwLine = Edit_LineFromChar(hEdit, dwCursor) + 1;
                     if (DialogBoxParam(g_hInst, MAKEINTRESOURCE(IDD_GOTOLINE), hWnd, GoToLine, (LPARAM) &dwLine) == IDOK)
                     {
                         if (dwLine <= 0 || dwLine > Edit_GetLineCount(hEdit))
