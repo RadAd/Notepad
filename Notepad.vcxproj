@@ -170,17 +170,20 @@
     <ClInclude Include="FileIO.h" />
     <ClInclude Include="FindReplace.h" />
     <ClInclude Include="Notepad.h" />
+    <ClInclude Include="RadEdit.h" />
     <ClInclude Include="RegX.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="StringX.h" />
     <ClInclude Include="targetver.h" />
+    <ClInclude Include="Text.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CommDlgX.cpp" />
     <ClCompile Include="FileIO.cpp" />
     <ClCompile Include="FindReplace.cpp" />
     <ClCompile Include="Notepad.cpp" />
+    <ClCompile Include="RadEdit.cpp" />
     <ClCompile Include="stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>

@@ -5,6 +5,7 @@
 #include "FileIO.h"
 #include "CommDlgX.h"
 #include "RegX.h"
+#include "RadEdit.h"
 #include <windowsx.h>
 #include <shellapi.h>
 
@@ -41,11 +42,6 @@ inline void EditReplaceHandle(HWND hEdit, HLOCAL hMem)
     InvalidateRect(hEdit, nullptr, TRUE);
 }
 
-inline void EditGetSel(HWND hEdit, LPDWORD pSelStart, LPDWORD pSelEnd)
-{
-    SendMessage(hEdit, EM_GETSEL, (WPARAM) pSelStart, (LPARAM) pSelEnd);
-}
-
 inline DWORD EditGetCursor(HWND hEdit)
 {
     // NOTE There is no message to get the cursor position
@@ -61,6 +57,7 @@ inline DWORD EditGetCursor(HWND hEdit)
     else
         Edit_SetSel(hEdit, nSelStart, nSelend);
     SetWindowRedraw(hEdit, TRUE);
+    RedrawWindow(hEdit, NULL, NULL, RDW_ERASE | RDW_FRAME | RDW_INVALIDATE | RDW_ALLCHILDREN);
     return nCursor;
 }
 
@@ -158,6 +155,8 @@ HWND InitInstance(HINSTANCE hInstance, int nCmdShow)
     icc.dwICC = ICC_STANDARD_CLASSES | ICC_WIN95_CLASSES | ICC_LINK_CLASS;
     InitCommonControlsEx(&icc);
 
+    RegisterRadEdit(hInstance);
+
     PCTSTR pszWindowClass = TEXT("NOTEPAD");
     MyRegisterClass(hInstance, pszWindowClass);
 
@@ -223,7 +222,9 @@ HFONT CreateFont(HWND hWnd)
 HWND CreateEditControl(HWND hWnd, HFONT hFont, BOOL bWordWrap)
 {
     DWORD dwWordWrap = bWordWrap ? 0 : WS_HSCROLL | ES_AUTOHSCROLL;
-    HWND hEdit = CreateWindow(WC_EDIT, TEXT(""),
+    //LPCTSTR pClass = WC_EDIT;
+    LPCTSTR pClass = WC_RADEDIT;
+    HWND hEdit = CreateWindow(pClass, TEXT(""),
         WS_CHILD | WS_VISIBLE | WS_VSCROLL | ES_MULTILINE | ES_AUTOVSCROLL | ES_NOHIDESEL | dwWordWrap,
         CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
         hWnd, (HMENU) IDC_EDIT, g_hInst, NULL);
