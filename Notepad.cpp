@@ -6,6 +6,7 @@
 #include "CommDlgX.h"
 #include "RegX.h"
 #include <windowsx.h>
+#include <shellapi.h>
 
 // TODO How to handle embedded '\0' in the file
 
@@ -37,6 +38,7 @@ inline void EditReplaceHandle(HWND hEdit, HLOCAL hMem)
     HLOCAL hOldMem = Edit_GetHandle(hEdit);
     LocalFree(hOldMem);
     Edit_SetHandle(hEdit, hMem);
+    InvalidateRect(hEdit, nullptr, TRUE);
 }
 
 inline void EditGetSel(HWND hEdit, LPDWORD pSelStart, LPDWORD pSelEnd)
@@ -83,7 +85,7 @@ HWND                InitInstance(HINSTANCE, int);
 LRESULT CALLBACK    WndProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK    About(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK    GoToLine(HWND, UINT, WPARAM, LPARAM);
-void                Open(HWND hWnd, HWND hEdit, LPCTSTR pszFileName);
+void                FileOpen(HWND hWnd, HWND hEdit, LPCTSTR pszFileName);
 
 int APIENTRY _tWinMain(_In_ HINSTANCE hInstance,
                      _In_opt_ HINSTANCE /*hPrevInstance*/,
@@ -101,14 +103,14 @@ int APIENTRY _tWinMain(_In_ HINSTANCE hInstance,
         LPCTSTR    lpFileName = lpCmdLine;
         HWND hEdit = GetDlgItem(hWndMain, IDC_EDIT);
         if (PathIsRoot(lpFileName))
-            Open(hWndMain, hEdit, lpFileName);
+            FileOpen(hWndMain, hEdit, lpFileName);
         else
         {
             TCHAR strCurrentDirectory[MAX_PATH];
             TCHAR strFileName[MAX_PATH];
             GetCurrentDirectory(ARRAYSIZE(strCurrentDirectory), strCurrentDirectory);
             PathCombine(strFileName, strCurrentDirectory, lpFileName);
-            Open(hWndMain, hEdit, strFileName);
+            FileOpen(hWndMain, hEdit, strFileName);
         }
     }
 
@@ -170,7 +172,7 @@ HWND InitInstance(HINSTANCE hInstance, int nCmdShow)
     r.left = RegQueryDWORD(g_hReg, TEXT("iWindowPosX"), CW_USEDEFAULT);
     r.bottom = RegQueryDWORD(g_hReg, TEXT("iWindowPosDY"), CW_USEDEFAULT);
     r.right = RegQueryDWORD(g_hReg, TEXT("iWindowPosDX"), CW_USEDEFAULT);
-    HWND hWnd = CreateWindow(pszWindowClass, g_szTitle, WS_OVERLAPPEDWINDOW,
+    HWND hWnd = CreateWindowEx(WS_EX_ACCEPTFILES, pszWindowClass, g_szTitle, WS_OVERLAPPEDWINDOW,
         r.left, r.top, r.right, r.bottom, nullptr, nullptr, hInstance, nullptr);
 
     if (hWnd)
@@ -245,7 +247,7 @@ HWND CreateStatusControl(HWND hWnd)
     return hStatus;
 }
 
-void Open(HWND hWnd, HWND hEdit, LPCTSTR pszFileName)
+void FileOpen(HWND hWnd, HWND hEdit, LPCTSTR pszFileName)
 {
     Encoding eEncoding = BOM_ANSI;
     HLOCAL hMem = LoadFile(pszFileName, &eEncoding);
@@ -253,7 +255,7 @@ void Open(HWND hWnd, HWND hEdit, LPCTSTR pszFileName)
     SetFileName(hWnd, pszFileName, eEncoding);
 }
 
-void SaveAs(HWND hWnd, HWND hEdit)
+void FileSaveAs(HWND hWnd, HWND hEdit)
 {
     TCHAR szFileName[MAX_PATH] = TEXT("");
     _tcscpy_s(szFileName, g_szFileName);
@@ -268,7 +270,7 @@ void SaveAs(HWND hWnd, HWND hEdit)
     }
 }
 
-void Save(HWND hWnd, HWND hEdit)
+void FileSave(HWND hWnd, HWND hEdit)
 {
     if (!IsEmpty(g_szFileName))
     {
@@ -278,7 +280,7 @@ void Save(HWND hWnd, HWND hEdit)
         Edit_EmptyUndoBuffer(hEdit);
     }
     else
-        SaveAs(hWnd, hEdit);
+        FileSaveAs(hWnd, hEdit);
 }
 
 BOOL CheckSave(HWND hWnd, HWND hEdit)
@@ -292,7 +294,7 @@ BOOL CheckSave(HWND hWnd, HWND hEdit)
         FormatString(sBuffer, IDS_ASK_SAVE, pFileName);
         int id = MessageBox(hWnd, sBuffer, g_szTitle, MB_YESNOCANCEL);
         if (id == IDYES)
-            Save(hWnd, hEdit);
+            FileSave(hWnd, hEdit);
         return id != IDCANCEL;
     }
     else
@@ -322,6 +324,7 @@ void UpdateCursorInfo(HWND hEdit, HWND hStatus)
 
 LRESULT CALLBACK EditExProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
 {
+    static DWORD nPos = 0;
     LRESULT ret = DefSubclassProc(hWnd, uMsg, wParam, lParam);
 
     switch (uMsg)
@@ -331,12 +334,20 @@ LRESULT CALLBACK EditExProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, 
     case WM_PASTE:
     case WM_KEYDOWN:
     case WM_LBUTTONDOWN:
-    case WM_MOUSEMOVE:
         {
             HWND hParent = GetParent(hWnd);
             HWND hStatus = GetDlgItem(hParent, IDC_STATUS);;
             UpdateCursorInfo(hWnd, hStatus);
         }
+        break;
+    case WM_MOUSEMOVE:
+        if (wParam & MK_LBUTTON && nPos != (DWORD) lParam)
+        {
+            HWND hParent = GetParent(hWnd);
+            HWND hStatus = GetDlgItem(hParent, IDC_STATUS);;
+            UpdateCursorInfo(hWnd, hStatus);
+        }
+        nPos = (DWORD) lParam;
         break;
     }
 
@@ -398,6 +409,21 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     case WM_SETFOCUS:
         SetFocus(hEdit);
         break;
+    case WM_DROPFILES:
+        {
+            HDROP hDropInfo = (HDROP) wParam;
+
+            SetForegroundWindow(hWnd);
+            UINT nFiles = ::DragQueryFile(hDropInfo, (UINT) -1, NULL, 0);
+            if (nFiles > 0)
+            {
+                TCHAR szFileName[_MAX_PATH];
+                ::DragQueryFile(hDropInfo, 0, szFileName, _MAX_PATH);
+                FileOpen(hWnd, hEdit, szFileName);
+            }
+            ::DragFinish(hDropInfo);
+        }
+        break;
     case WM_COMMAND:
         {
             int wmId = LOWORD(wParam);
@@ -420,15 +446,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                     if (SelectFilename(hWnd, TRUE, szFileName, ARRAYSIZE(szFileName), &eEncoding))
                     {
                         // TODO How to use selected encoding?
-                        Open(hWnd, hEdit, szFileName);
+                        FileOpen(hWnd, hEdit, szFileName);
                     }
                 }
                 break;
             case ID_FILE_SAVE:
-                Save(hWnd, hEdit);
+                FileSave(hWnd, hEdit);
                 break;
             case ID_FILE_SAVEAS:
-                SaveAs(hWnd, hEdit);
+                FileSaveAs(hWnd, hEdit);
                 break;
             case IDM_EDIT_UNDO:
                 Edit_Undo(hEdit);
