@@ -6,6 +6,18 @@
 
 // TODO
 // WM_WANTKEYS
+// Check parent notifications EN_*
+// Support IME
+// Context menu
+// Support word wrap
+// readonly
+
+// NOT Implemented:
+// limit text
+// single line
+// cue banner
+// password char
+// ballon tool tip
 
 LONG GetWidth(const RECT& r)
 {
@@ -114,23 +126,23 @@ public:
     void OnDestroy(HWND hWnd);
     BOOL OnEraseBkgnd(HWND hWnd, HDC hdc);
     void OnPaint(HWND hWnd);
-    void OnSize(HWND hwnd, UINT state, int cx, int cy);
+    void OnSize(HWND hWnd, UINT state, int cx, int cy);
     void OnScroll(HWND hWnd, UINT nSBCode, UINT /*nPos*/, HWND hScrollBar, UINT nBar) const;
-    void OnVScroll(HWND hWnd, HWND hwndCtl, UINT code, int pos) { OnScroll(hWnd, code, pos, hwndCtl, SB_VERT); NotifyParent(hWnd, EN_VSCROLL); }
-    void OnHScroll(HWND hWnd, HWND hwndCtl, UINT code, int pos) { OnScroll(hWnd, code, pos, hwndCtl, SB_HORZ); NotifyParent(hWnd, EN_HSCROLL); }
+    void OnVScroll(HWND hWnd, HWND hWndCtl, UINT code, int pos) { OnScroll(hWnd, code, pos, hWndCtl, SB_VERT); NotifyParent(hWnd, EN_VSCROLL); }
+    void OnHScroll(HWND hWnd, HWND hWndCtl, UINT code, int pos) { OnScroll(hWnd, code, pos, hWndCtl, SB_HORZ); NotifyParent(hWnd, EN_HSCROLL); }
     void OnSetFocus(HWND hWnd, HWND hWndOldFocus);
     void OnKillFocus(HWND hWnd, HWND hWndNewFocus);
     void OnSetFont(HWND hWnd, HFONT hFont, BOOL bRedraw);
-    HFONT OnGetFont(HWND hwnd) const;
+    HFONT OnGetFont(HWND hWnd) const;
     void OnKey(HWND hWnd, UINT vk, BOOL fDown, int cRepeat, UINT flags);
     void OnChar(HWND hWnd, TCHAR ch, int cRepeat);
-    void OnLButtonDown(HWND hwnd, BOOL fDoubleClick, int x, int y, UINT keyFlags);
-    void OnLButtonUp(HWND hwnd, int x, int y, UINT keyFlags);
-    void OnMouseMove(HWND hwnd, int x, int y, UINT keyFlags);
-    void OnMouseWheel(HWND hwnd, int xPos, int yPos, int zDelta, UINT fwKeys);
+    void OnLButtonDown(HWND hWnd, BOOL fDoubleClick, int x, int y, UINT keyFlags);
+    void OnLButtonUp(HWND hWnd, int x, int y, UINT keyFlags);
+    void OnMouseMove(HWND hWnd, int x, int y, UINT keyFlags);
+    void OnMouseWheel(HWND hWnd, int xPos, int yPos, int zDelta, UINT fwKeys);
     INT OnGetTextLength(HWND hWnd);
-    INT OnGetText(HWND hwnd, int cchTextMax, LPTSTR lpszText);
-    void OnSetText(HWND hwnd, LPCTSTR lpszText);
+    INT OnGetText(HWND hWnd, int cchTextMax, LPTSTR lpszText);
+    void OnSetText(HWND hWnd, LPCTSTR lpszText);
     void OnCut(HWND hWnd);
     void OnCopy(HWND hWnd);
     void OnPaste(HWND hWnd);
@@ -252,16 +264,19 @@ void RadEdit::ReplaceSel(HWND hWnd, PCWSTR pText, BOOL /*bStoreUndo*/)
 
     DWORD nSelStart, nSelEnd;
     OnGetSel(hWnd, &nSelStart, &nSelEnd);
-    if (HLOCAL hTextNew = TextReplace(m_hText, nSelStart, nSelEnd, pText))
+    if (nSelStart != nSelEnd || !IsEmpty(pText))
     {
-        m_hText = hTextNew;
-        m_bModify = TRUE;
-        Edit_SetSel(hWnd, nSelEnd, nSelEnd);
-        InvalidateRect(hWnd, nullptr, TRUE);
-        NotifyParent(hWnd, EN_CHANGE);
+        if (HLOCAL hTextNew = TextReplace(m_hText, nSelStart, nSelEnd, pText))
+        {
+            m_hText = hTextNew;
+            m_bModify = TRUE;
+            Edit_SetSel(hWnd, nSelEnd, nSelEnd);
+            InvalidateRect(hWnd, nullptr, TRUE);
+            NotifyParent(hWnd, EN_CHANGE);
+        }
+        else
+            NotifyParent(hWnd, EN_ERRSPACE);
     }
-    else
-        NotifyParent(hWnd, EN_ERRSPACE);
 }
 
 UINT DoScroll(UINT nSBCode, const SCROLLINFO& info)
@@ -425,19 +440,19 @@ void RadEdit::OnSetFont(HWND hWnd, HFONT hFont, BOOL bRedraw)
         InvalidateRect(hWnd, nullptr, TRUE);
 }
 
-HFONT RadEdit::OnGetFont(HWND hwnd) const
+HFONT RadEdit::OnGetFont(HWND hWnd) const
 {
    return m_hFont;
 }
 
 void RadEdit::OnKey(HWND hWnd, UINT vk, BOOL fDown, int cRepeat, UINT flags)
 {
-    bool bShift = (GetKeyState(VK_SHIFT) & KF_UP) != 0;
-    bool bCtrl = (GetKeyState(VK_CONTROL) & KF_UP) != 0;
-    bool bAlt = (GetKeyState(VK_MENU) & KF_UP) != 0;
-
     if (!fDown)
         return;
+
+    const bool bShift = (GetKeyState(VK_SHIFT) & KF_UP) != 0;
+    const bool bCtrl = (GetKeyState(VK_CONTROL) & KF_UP) != 0;
+    const bool bAlt = (GetKeyState(VK_MENU) & KF_UP) != 0;
 
     switch (vk)
     {
@@ -584,18 +599,45 @@ void RadEdit::OnKey(HWND hWnd, UINT vk, BOOL fDown, int cRepeat, UINT flags)
         break;
 
     case VK_DELETE:
-        if (m_nSelEnd == m_nSelStart)
+        if (bShift)
+           OnCut(hWnd);
+        else
         {
-            int nSelEnd = GetNextChar(m_hText, m_nSelEnd);
-            if (nSelEnd >= 0)
-                m_nSelEnd = nSelEnd;
-        }
-        if (m_nSelEnd != m_nSelStart)
-        {
-            WCHAR r[] = _T("");
-            ReplaceSel(hWnd, r, TRUE);
+            if (m_nSelEnd == m_nSelStart)
+            {
+                int nSelEnd = GetNextChar(m_hText, m_nSelEnd);
+                if (nSelEnd >= 0)
+                    m_nSelEnd = nSelEnd;
+            }
+            if (m_nSelEnd != m_nSelStart)
+            {
+                WCHAR r[] = _T("");
+                ReplaceSel(hWnd, r, TRUE);
+            }
         }
         break;
+
+    case VK_INSERT:
+       if (bCtrl)
+           OnCopy(hWnd);
+       if (bShift)
+           OnPaste(hWnd);
+       break;
+
+    case _T('X'):
+       if (bCtrl)
+           OnCut(hWnd);
+       break;
+
+    case _T('C'):
+       if (bCtrl)
+          OnCopy(hWnd);
+       break;
+
+    case _T('V'):
+       if (bCtrl)
+          OnPaste(hWnd);
+       break;
     }
 }
 
@@ -710,7 +752,7 @@ INT RadEdit::OnGetText(HWND hWnd, int cchTextMax, LPTSTR lpszText)
     return (INT) wcslen(lpszText);    // TODO capture size when copying
 }
 
-void RadEdit::OnSetText(HWND hwnd, LPCTSTR lpszText)
+void RadEdit::OnSetText(HWND hWnd, LPCTSTR lpszText)
 {
     HLOCAL hTextNew = TextCreate(lpszText);
     if (hTextNew != NULL)
@@ -725,12 +767,32 @@ void RadEdit::OnSetText(HWND hwnd, LPCTSTR lpszText)
 
 void RadEdit::OnCut(HWND hWnd)
 {
-   // TODO
+   OnCopy(hWnd);
+   ReplaceSel(hWnd, _T(""), TRUE);
 }
 
 void RadEdit::OnCopy(HWND hWnd)
 {
-   // TODO
+    DWORD nSelStart, nSelEnd;
+    OnGetSel(hWnd, &nSelStart, &nSelEnd);
+
+    if (nSelStart < nSelEnd)
+    {
+        DWORD nLength = nSelEnd - nSelStart;
+        HGLOBAL hClip = GlobalAlloc(GMEM_MOVEABLE, (nLength + 1) * sizeof(WCHAR));
+        PWSTR const clip = (PWSTR) GlobalLock(hClip);
+        PCWSTR const buffer = (PCWSTR) LocalLock(m_hText);
+        memcpy(clip, buffer + nSelStart, nLength * sizeof(WCHAR));
+        clip[nLength] = L'\0';
+        LocalUnlock(m_hText);
+        GlobalUnlock(hClip);
+
+        if (OpenClipboard(hWnd))
+        {
+            ENSURE(SetClipboardData(CF_UNICODETEXT, hClip));
+            CloseClipboard();
+        }
+    }
 }
 
 void RadEdit::OnPaste(HWND hWnd)
@@ -787,10 +849,10 @@ void RadEdit::OnSetSel(HWND hWnd, DWORD nSelStart, DWORD nSelEnd)
     InvalidateRect(hWnd, nullptr, TRUE);
 }
 
-#define HANDLE_EM_GETSEL(hwnd, wParam, lParam, fn) \
-    (LRESULT)(fn)(hwnd, (LPDWORD) wParam, (LPDWORD) lParam)
-#define HANDLE_EM_SETSEL(hwnd, wParam, lParam, fn) \
-    ((fn)(hwnd, (DWORD) wParam, (DWORD) lParam), 0L)
+#define HANDLE_EM_GETSEL(hWnd, wParam, lParam, fn) \
+    (LRESULT)(fn)(hWnd, (LPDWORD) wParam, (LPDWORD) lParam)
+#define HANDLE_EM_SETSEL(hWnd, wParam, lParam, fn) \
+    ((fn)(hWnd, (DWORD) wParam, (DWORD) lParam), 0L)
 
 LRESULT RadEdit::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {

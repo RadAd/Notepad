@@ -13,6 +13,3 @@ void FormatString(TCHAR (&pStr)[size], UINT uID, ...)
 
 PSTR StrRStrA(_In_ PCSTR pszSource, _In_opt_ PCSTR pszLast, _In_ PCSTR pszSrch);
 PWSTR StrRStrW(_In_ PCWSTR pszSource, _In_opt_ PCWSTR pszLast, _In_ PCWSTR pszSrch);
-
-inline BOOL IsEmpty(_In_ LPSTR pszStr) { return pszStr[0] == '\0'; }
-inline BOOL IsEmpty(_In_ LPWSTR pszStr) { return pszStr[0] == L'\0'; }

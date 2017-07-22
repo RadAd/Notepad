@@ -2,7 +2,6 @@
 
 // TODO Consistently use DWORD for char pos
 // TODO Support unicode use CharPrev/CharNext or IsDBCSLeadByte
-// TODO Fix use LocalAlloc and LocalLock
 
 int TextLength(HLOCAL hText);
 

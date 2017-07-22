@@ -36,3 +36,6 @@
         )
 #define ENSURE(x) ensure(x)
 #endif
+
+inline BOOL IsEmpty(_In_ LPCSTR pszStr) { return pszStr[0] == '\0'; }
+inline BOOL IsEmpty(_In_ LPCWSTR pszStr) { return pszStr[0] == L'\0'; }
