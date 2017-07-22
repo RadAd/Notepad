@@ -4,6 +4,9 @@
 #include <windowsx.h>
 #include <intsafe.h>
 
+// TODO
+// WM_WANTKEYS
+
 LONG GetWidth(const RECT& r)
 {
     return r.right - r.left;
@@ -57,7 +60,8 @@ int GetTabbedTextExtentEx(_In_ HDC hDC,
 
 void NotifyParent(HWND hWnd, int code)
 {
-    SendMessage(GetParent(hWnd), WM_COMMAND, MAKEWPARAM(GetDlgCtrlID(hWnd), code), (LPARAM) hWnd);
+    //SendMessage(GetParent(hWnd), WM_COMMAND, MAKEWPARAM(GetDlgCtrlID(hWnd), code), (LPARAM) hWnd);
+    FORWARD_WM_COMMAND(GetParent(hWnd), GetWindowID(hWnd), hWnd, code, SNDMSG);
 }
 
 LRESULT CALLBACK RadEditWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
@@ -79,8 +83,9 @@ ATOM RegisterRadEdit(HINSTANCE hInstance)
     return RegisterClass(&wc);
 }
 
-struct RadEdit
+class RadEdit
 {
+private:
     HFONT m_hFont = NULL;
     TEXTMETRIC m_TextMetrics = {};
     HLOCAL m_hText = NULL;
@@ -104,12 +109,34 @@ struct RadEdit
     void Draw(HWND hWnd, HDC hDC) const;
     void ReplaceSel(HWND hWnd, PCWSTR pText, BOOL bStoreUndo);
 
+public:
+    BOOL OnCreate(HWND hWnd, LPCREATESTRUCT lpCreateStruct);
+    void OnDestroy(HWND hWnd);
+    BOOL OnEraseBkgnd(HWND hWnd, HDC hdc);
+    void OnPaint(HWND hWnd);
+    void OnSize(HWND hwnd, UINT state, int cx, int cy);
     void OnScroll(HWND hWnd, UINT nSBCode, UINT /*nPos*/, HWND hScrollBar, UINT nBar) const;
+    void OnVScroll(HWND hWnd, HWND hwndCtl, UINT code, int pos) { OnScroll(hWnd, code, pos, hwndCtl, SB_VERT); NotifyParent(hWnd, EN_VSCROLL); }
+    void OnHScroll(HWND hWnd, HWND hwndCtl, UINT code, int pos) { OnScroll(hWnd, code, pos, hwndCtl, SB_HORZ); NotifyParent(hWnd, EN_HSCROLL); }
+    void OnSetFocus(HWND hWnd, HWND hWndOldFocus);
+    void OnKillFocus(HWND hWnd, HWND hWndNewFocus);
     void OnSetFont(HWND hWnd, HFONT hFont, BOOL bRedraw);
+    HFONT OnGetFont(HWND hwnd) const;
     void OnKey(HWND hWnd, UINT vk, BOOL fDown, int cRepeat, UINT flags);
     void OnChar(HWND hWnd, TCHAR ch, int cRepeat);
+    void OnLButtonDown(HWND hwnd, BOOL fDoubleClick, int x, int y, UINT keyFlags);
+    void OnLButtonUp(HWND hwnd, int x, int y, UINT keyFlags);
+    void OnMouseMove(HWND hwnd, int x, int y, UINT keyFlags);
+    void OnMouseWheel(HWND hwnd, int xPos, int yPos, int zDelta, UINT fwKeys);
+    INT OnGetTextLength(HWND hWnd);
+    INT OnGetText(HWND hwnd, int cchTextMax, LPTSTR lpszText);
+    void OnSetText(HWND hwnd, LPCTSTR lpszText);
+    void OnCut(HWND hWnd);
+    void OnCopy(HWND hWnd);
+    void OnPaste(HWND hWnd);
+    void OnClear(HWND hWnd);
 
-    LRESULT OnGetSel(LPDWORD pSelStart, LPDWORD pSelEnd) const;
+    LRESULT OnGetSel(HWND hWnd, LPDWORD pSelStart, LPDWORD pSelEnd) const;
     void OnSetSel(HWND hWnd, DWORD nSelStart, DWORD nSelEnd);
 
     LRESULT WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
@@ -118,7 +145,7 @@ struct RadEdit
 void RadEdit::CalcScrollBars(HWND hWnd) const
 {
     SIZE s = {};
-    PCWSTR const buffer = (PCWSTR) GlobalLock(m_hText);
+    PCWSTR const buffer = (PCWSTR) LocalLock(m_hText);
     int nIndex = 0;
     while (nIndex >= 0)
     {
@@ -139,7 +166,7 @@ void RadEdit::CalcScrollBars(HWND hWnd) const
         }
         ++s.cy;
     }
-    GlobalUnlock(m_hText);
+    LocalUnlock(m_hText);
 
     RECT cr = {};
     GetClientRect(hWnd, &cr);
@@ -172,10 +199,10 @@ void RadEdit::MoveCaret(HWND hWnd) const
 
 void RadEdit::Draw(HWND hWnd, HDC hDC) const
 {
-    HFONT of = (HFONT) SelectObject(hDC, m_hFont);
+    HFONT of = SelectFont(hDC, m_hFont);
 
-    /*HBRUSH hBgBrush = (HBRUSH)*/ SendMessage(GetParent(hWnd), WM_CTLCOLOREDIT, (WPARAM) hDC, (LPARAM) hWnd);
-    //::DeleteObject(hBgBrush);
+    /*HBRUSH hBgBrush = */ FORWARD_WM_CTLCOLOREDIT(GetParent(hWnd), hDC, hWnd, SNDMSG);
+    //DeleteBrush(hBgBrush);
 
     // TODO Use margins here and in calcscrollbars
 
@@ -183,10 +210,10 @@ void RadEdit::Draw(HWND hWnd, HDC hDC) const
     GetClientRect(hWnd, &cr);
 
     DWORD nSelStart, nSelEnd;
-    OnGetSel(&nSelStart, &nSelEnd);
+    OnGetSel(hWnd, &nSelStart, &nSelEnd);
 
     POINT p = { -MyGetScrollPos(hWnd, SB_HORZ) * AveCharWidth() + MarginLeft(), 0 };
-    PCWSTR const buffer = (PCWSTR) GlobalLock(m_hText);
+    PCWSTR const buffer = (PCWSTR) LocalLock(m_hText);
     const int nFirstLine = Edit_GetFirstVisibleLine(hWnd);  // TODO Use message ???
     int nIndex = TextLineIndex(m_hText, nFirstLine);
     while (nIndex >= 0)
@@ -214,9 +241,9 @@ void RadEdit::Draw(HWND hWnd, HDC hDC) const
         if ((p.y + m_TextMetrics.tmHeight) > cr.bottom)
             break;
     }
-    GlobalUnlock(m_hText);
+    LocalUnlock(m_hText);
 
-    SelectObject(hDC, of);
+    SelectFont(hDC, of);
 }
 
 void RadEdit::ReplaceSel(HWND hWnd, PCWSTR pText, BOOL /*bStoreUndo*/)
@@ -224,7 +251,7 @@ void RadEdit::ReplaceSel(HWND hWnd, PCWSTR pText, BOOL /*bStoreUndo*/)
     // TODO bStoreUndo
 
     DWORD nSelStart, nSelEnd;
-    OnGetSel(&nSelStart, &nSelEnd);
+    OnGetSel(hWnd, &nSelStart, &nSelEnd);
     if (HLOCAL hTextNew = TextReplace(m_hText, nSelStart, nSelEnd, pText))
     {
         m_hText = hTextNew;
@@ -287,6 +314,58 @@ UINT DoScroll(UINT nSBCode, const SCROLLINFO& info)
     return curpos;
 }
 
+BOOL RadEdit::OnCreate(HWND hWnd, LPCREATESTRUCT lpCreateStruct)
+{
+    ASSERT(lpCreateStruct->style & WS_VSCROLL);
+    ASSERT(lpCreateStruct->style & WS_HSCROLL);
+    ASSERT(lpCreateStruct->style & ES_AUTOVSCROLL);
+    ASSERT(lpCreateStruct->style & ES_AUTOHSCROLL);
+    ASSERT(lpCreateStruct->style & ES_MULTILINE);
+
+    m_hText = LocalAlloc(LHND, sizeof(WCHAR));
+    OnSetFont(hWnd, NULL, FALSE);
+    return TRUE;
+}
+
+void RadEdit::OnDestroy(HWND hWGnd)
+{
+   LocalFree(m_hText);
+}
+
+BOOL RadEdit::OnEraseBkgnd(HWND hWnd, HDC hdc)
+{
+   return FALSE;
+}
+
+void RadEdit::OnPaint(HWND hWnd)
+{
+    PAINTSTRUCT ps = {};
+    HDC hDC = BeginPaint(hWnd, &ps);
+
+    RECT cr = {};
+    GetClientRect(hWnd, &cr);
+
+    HDC hBmpDC = CreateCompatibleDC(hDC);
+    HBITMAP hBmp = CreateCompatibleBitmap(hDC, GetWidth(cr), GetHeight(cr));
+    HBITMAP hOldBmp = SelectBitmap(hBmpDC, hBmp);
+
+    DefWindowProc(hWnd, WM_ERASEBKGND, (WPARAM) hBmpDC, 0);
+    Draw(hWnd, hBmpDC);
+    BitBlt(hDC, 0, 0, GetWidth(cr), GetHeight(cr), hBmpDC, 0, 0, SRCCOPY);
+
+    SelectBitmap(hBmpDC, hOldBmp);
+
+    DeleteBitmap(hBmp);
+    DeleteDC(hBmpDC);
+
+    EndPaint(hWnd, &ps);
+}
+
+void RadEdit::OnSize(HWND hWnd, UINT state, int cx, int cy)
+{
+   CalcScrollBars(hWnd);
+}
+
 void RadEdit::OnScroll(HWND hWnd, UINT nSBCode, UINT /*nPos*/, HWND hScrollBar, UINT nBar) const
 {
     if (hScrollBar == NULL)
@@ -305,10 +384,24 @@ void RadEdit::OnScroll(HWND hWnd, UINT nSBCode, UINT /*nPos*/, HWND hScrollBar, 
     InvalidateRect(hWnd, nullptr, TRUE);
 }
 
+void RadEdit::OnSetFocus(HWND hWnd, HWND hWndOldFocus)
+{
+    CreateCaret(hWnd, NULL, 1, m_TextMetrics.tmHeight);
+    MoveCaret(hWnd);
+    ShowCaret(hWnd);
+    NotifyParent(hWnd, EN_SETFOCUS);
+}
+
+void RadEdit::OnKillFocus(HWND hWnd, HWND hWndNewFocus)
+{
+    DestroyCaret();
+    NotifyParent(hWnd, EN_KILLFOCUS);
+}
+
 void RadEdit::OnSetFont(HWND hWnd, HFONT hFont, BOOL bRedraw)
 {
     if (hFont == NULL)
-        hFont = (HFONT) GetStockObject(SYSTEM_FONT);
+        hFont = GetStockFont(SYSTEM_FONT);
 
     const int ocs = AveCharWidth();
 
@@ -316,9 +409,9 @@ void RadEdit::OnSetFont(HWND hWnd, HFONT hFont, BOOL bRedraw)
 
     {
         HDC hDC = GetWindowDC(hWnd);
-        HFONT of = (HFONT) SelectObject(hDC, m_hFont);
+        HFONT of = SelectFont(hDC, m_hFont);
         GetTextMetrics(hDC, &m_TextMetrics);
-        SelectObject(hDC, of);
+        SelectFont(hDC, of);
         ReleaseDC(hWnd, hDC);
     }
 
@@ -330,6 +423,11 @@ void RadEdit::OnSetFont(HWND hWnd, HFONT hFont, BOOL bRedraw)
 
     if (bRedraw)
         InvalidateRect(hWnd, nullptr, TRUE);
+}
+
+HFONT RadEdit::OnGetFont(HWND hwnd) const
+{
+   return m_hFont;
 }
 
 void RadEdit::OnKey(HWND hWnd, UINT vk, BOOL fDown, int cRepeat, UINT flags)
@@ -352,8 +450,7 @@ void RadEdit::OnKey(HWND hWnd, UINT vk, BOOL fDown, int cRepeat, UINT flags)
             nSelEnd = GetPrevChar(m_hText, nSelEnd);
             if (bCtrl && nSelEnd >= 0)
             {
-                //EDITWORDBREAKPROC ewb = m_pEditWordBreakProc != nullptr ? m_pEditWordBreakProc : DefaultEditWordBreakProc;
-                EDITWORDBREAKPROC ewb = &DefaultEditWordBreakProc;
+                EDITWORDBREAKPROC ewb = m_pEditWordBreakProc != nullptr ? m_pEditWordBreakProc : DefaultEditWordBreakProc;
                 nSelEnd = MoveWord(ewb, WB_LEFT, m_hText, nSelEnd);
             }
             if (nSelEnd >= 0)
@@ -375,8 +472,7 @@ void RadEdit::OnKey(HWND hWnd, UINT vk, BOOL fDown, int cRepeat, UINT flags)
             nSelEnd = GetNextChar(m_hText, nSelEnd);
             if (bCtrl && nSelEnd >= 0)
             {
-                //EDITWORDBREAKPROC ewb = m_pEditWordBreakProc != nullptr ? m_pEditWordBreakProc : DefaultEditWordBreakProc;
-                EDITWORDBREAKPROC ewb = DefaultEditWordBreakProc;
+                EDITWORDBREAKPROC ewb = m_pEditWordBreakProc != nullptr ? m_pEditWordBreakProc : DefaultEditWordBreakProc;
                 nSelEnd = MoveWord(ewb, WB_RIGHT, m_hText, nSelEnd);
             }
             if (nSelEnd >= 0)
@@ -545,7 +641,121 @@ void RadEdit::OnChar(HWND hWnd, TCHAR ch, int cRepeat)
     }
 }
 
-LRESULT RadEdit::OnGetSel(LPDWORD pSelStart, LPDWORD pSelEnd) const
+void RadEdit::OnLButtonDown(HWND hWnd, BOOL fDoubleClick, int x, int y, UINT keyFlags)
+{
+   POINT point = { x, y };
+   if (fDoubleClick)
+   {
+        DWORD nSelStart = m_nSelStart, nSelEnd = m_nSelEnd;
+        //OnGetSel(hWnd, &nSelStart, &nSelEnd);
+        nSelEnd = EditCharFromPos(hWnd, point);
+        if (!(keyFlags & MK_SHIFT))
+            nSelStart = nSelEnd;
+        OnSetSel(hWnd, nSelStart, nSelEnd);
+        SetCapture(hWnd);
+   }
+   else
+   {
+        DWORD nSelStart = m_nSelStart, nSelEnd = m_nSelEnd;
+        //OnGetSel(hWnd, &nSelStart, &nSelEnd);
+        nSelEnd = EditCharFromPos(hWnd, point);
+        EDITWORDBREAKPROC ewb = &DefaultEditWordBreakProc;
+        nSelStart = MoveWord(ewb, WB_LEFT, m_hText, nSelEnd);
+        nSelEnd = MoveWord(ewb, WB_RIGHT, m_hText, nSelEnd);
+        OnSetSel(hWnd, nSelStart, nSelEnd);
+   }
+}
+
+void RadEdit::OnLButtonUp(HWND hWnd, int x, int y, UINT keyFlags)
+{
+    POINT point = { x, y };
+    ReleaseCapture();
+}
+
+void RadEdit::OnMouseMove(HWND hWnd, int x, int y, UINT keyFlags)
+{
+    POINT point = { x, y };
+    if (GetCapture() == hWnd)
+    {
+        // TODO Word select mode after a dbl click
+        // TODO Scroll window
+        DWORD nSelStart = m_nSelStart, nSelEnd = m_nSelEnd;
+        //OnGetSel(hWnd, &nSelStart, &nSelEnd);
+        nSelEnd = EditCharFromPos(hWnd, point);
+        OnSetSel(hWnd, nSelStart, nSelEnd);
+    }
+}
+
+void RadEdit::OnMouseWheel(HWND hWnd, int xPos, int yPos, int zDelta, UINT fwKeys)
+{
+    if ((fwKeys & (MK_CONTROL | MK_SHIFT)) == 0)
+    {
+        int nLines = MulDiv(zDelta, -3, WHEEL_DELTA);
+        Edit_Scroll(hWnd, nLines, 0);
+    }
+}
+
+INT RadEdit::OnGetTextLength(HWND hWnd)
+{
+   return TextLength(m_hText);
+}
+
+INT RadEdit::OnGetText(HWND hWnd, int cchTextMax, LPTSTR lpszText)
+{
+    PCWSTR const buffer = (PCWSTR) LocalLock(m_hText);
+    StrCpyN(lpszText, buffer, cchTextMax);
+    LocalUnlock(m_hText);
+
+    return (INT) wcslen(lpszText);    // TODO capture size when copying
+}
+
+void RadEdit::OnSetText(HWND hwnd, LPCTSTR lpszText)
+{
+    HLOCAL hTextNew = TextCreate(lpszText);
+    if (hTextNew != NULL)
+    {
+        LocalFree(m_hText);
+        m_hText = hTextNew;
+        return; // TODO TRUE;
+    }
+    else
+        return; // TODO FALSE;
+}
+
+void RadEdit::OnCut(HWND hWnd)
+{
+   // TODO
+}
+
+void RadEdit::OnCopy(HWND hWnd)
+{
+   // TODO
+}
+
+void RadEdit::OnPaste(HWND hWnd)
+{
+   ReplaceSel(hWnd, L"One", TRUE);
+   if (OpenClipboard(hWnd))
+   {
+      ReplaceSel(hWnd, L"Two", TRUE);
+       HGLOBAL hClip = GetClipboardData(CF_UNICODETEXT);
+       if (hClip != NULL)
+       {
+           ReplaceSel(hWnd, L"Three", TRUE);
+           PCWSTR const buffer = (PCWSTR) GlobalLock(hClip);
+           ReplaceSel(hWnd, buffer, TRUE);
+           GlobalUnlock(hClip);
+       }
+       CloseClipboard();
+   }
+}
+
+void RadEdit::OnClear(HWND hWnd)
+{
+   ReplaceSel(hWnd, L"", TRUE);
+}
+
+LRESULT RadEdit::OnGetSel(HWND hWnd, LPDWORD pSelStart, LPDWORD pSelEnd) const
 {
     DWORD nStart = min(m_nSelStart, m_nSelEnd);
     DWORD nEnd = max(m_nSelStart, m_nSelEnd);
@@ -579,159 +789,47 @@ void RadEdit::OnSetSel(HWND hWnd, DWORD nSelStart, DWORD nSelEnd)
     InvalidateRect(hWnd, nullptr, TRUE);
 }
 
+#define HANDLE_EM_GETSEL(hwnd, wParam, lParam, fn) \
+    (LRESULT)(fn)(hwnd, (LPDWORD) wParam, (LPDWORD) lParam)
+#define HANDLE_EM_SETSEL(hwnd, wParam, lParam, fn) \
+    ((fn)(hwnd, (DWORD) wParam, (DWORD) lParam), 0L)
+
 LRESULT RadEdit::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
     switch (message)
     {
-    case WM_CREATE:
-        {
-            LPCREATESTRUCT lpCreateStruct = (LPCREATESTRUCT) lParam;
-            ASSERT(lpCreateStruct->style & WS_VSCROLL);
-            ASSERT(lpCreateStruct->style & WS_HSCROLL);
-            ASSERT(lpCreateStruct->style & ES_AUTOVSCROLL);
-            ASSERT(lpCreateStruct->style & ES_AUTOHSCROLL);
-            ASSERT(lpCreateStruct->style & ES_MULTILINE);
-        }
+    HANDLE_MSG(hWnd, WM_CREATE,        OnCreate);
+    HANDLE_MSG(hWnd, WM_DESTROY,       OnDestroy);
+    HANDLE_MSG(hWnd, WM_ERASEBKGND,    OnEraseBkgnd);
+    HANDLE_MSG(hWnd, WM_PAINT,         OnPaint);
+    HANDLE_MSG(hWnd, WM_SIZE,          OnSize);
+    HANDLE_MSG(hWnd, WM_VSCROLL,       OnVScroll);
+    HANDLE_MSG(hWnd, WM_HSCROLL,       OnHScroll);
+    HANDLE_MSG(hWnd, WM_SETFOCUS,      OnSetFocus);
+    HANDLE_MSG(hWnd, WM_KILLFOCUS,     OnKillFocus);
+    HANDLE_MSG(hWnd, WM_SETFONT,       OnSetFont);
+    HANDLE_MSG(hWnd, WM_GETFONT,       OnGetFont);
+    HANDLE_MSG(hWnd, WM_KEYDOWN,       OnKey);
+    HANDLE_MSG(hWnd, WM_KEYUP,         OnKey);
+    HANDLE_MSG(hWnd, WM_CHAR,          OnChar);
+    HANDLE_MSG(hWnd, WM_LBUTTONDOWN,   OnLButtonDown);
+    HANDLE_MSG(hWnd, WM_LBUTTONDBLCLK, OnLButtonDown);
+    HANDLE_MSG(hWnd, WM_LBUTTONUP,     OnLButtonUp);
+    HANDLE_MSG(hWnd, WM_MOUSEMOVE,     OnMouseMove);
+    HANDLE_MSG(hWnd, WM_MOUSEWHEEL,    OnMouseWheel);
+    HANDLE_MSG(hWnd, WM_GETTEXTLENGTH, OnGetTextLength);
+    HANDLE_MSG(hWnd, WM_GETTEXT,       OnGetText);
+    HANDLE_MSG(hWnd, WM_SETTEXT,       OnSetText);
+    HANDLE_MSG(hWnd, WM_CUT,           OnCut);
+    HANDLE_MSG(hWnd, WM_COPY,          OnCopy);
+    HANDLE_MSG(hWnd, WM_PASTE,         OnPaste);
+    HANDLE_MSG(hWnd, WM_CLEAR,         OnClear);
 
-        m_hText = GlobalAlloc(GHND, sizeof(WCHAR));
-        OnSetFont(hWnd, NULL, FALSE);
-        break;
-
-    case WM_DESTROY:
-        LocalFree(m_hText);
-        break;
-
-    case WM_ERASEBKGND:
-        return FALSE;
-        break;
-
-    case WM_PAINT:
-        {
-            PAINTSTRUCT ps = {};
-            HDC hDC = BeginPaint(hWnd, &ps);
-
-            RECT cr = {};
-            GetClientRect(hWnd, &cr);
-
-            HDC hBmpDC = CreateCompatibleDC(hDC);
-            HBITMAP hBmp = CreateCompatibleBitmap(hDC, GetWidth(cr), GetHeight(cr));
-            HBITMAP hOldBmp = (HBITMAP) SelectObject(hBmpDC, hBmp);
-
-            DefWindowProc(hWnd, WM_ERASEBKGND, (WPARAM) hBmpDC, 0);
-            Draw(hWnd, hBmpDC);
-            BitBlt(hDC, 0, 0, GetWidth(cr), GetHeight(cr), hBmpDC, 0, 0, SRCCOPY);
-
-            SelectObject(hBmpDC, hOldBmp);
-
-            DeleteObject(hBmp);
-            DeleteDC(hBmpDC);
-
-            EndPaint(hWnd, &ps);
-            return 0;
-        }
-        break;
-
-    case WM_SIZE:
-        CalcScrollBars(hWnd);
-        break;
-
-    case WM_VSCROLL:
-        OnScroll(hWnd, LOWORD(wParam), HIWORD(wParam), (HWND) lParam, SB_VERT);
-        NotifyParent(hWnd, EN_VSCROLL);
-        return 0;
-        break;
-
-    case WM_HSCROLL:
-        OnScroll(hWnd, LOWORD(wParam), HIWORD(wParam), (HWND) lParam, SB_HORZ);
-        NotifyParent(hWnd, EN_HSCROLL);
-        return 0;
-        break;
-
-    case WM_SETFOCUS:
-        CreateCaret(hWnd, NULL, 1, m_TextMetrics.tmHeight);
-        MoveCaret(hWnd);
-        ShowCaret(hWnd);
-        NotifyParent(hWnd, EN_SETFOCUS);
-        break;
-
-    case WM_KILLFOCUS:
-        DestroyCaret();
-        NotifyParent(hWnd, EN_KILLFOCUS);
-        break;
-
-    case WM_SETFONT:
-        HANDLE_WM_SETFONT(hWnd, wParam, lParam, OnSetFont);
-        return 0;
-        break;
-
-    case WM_GETFONT:
-        return (LRESULT) m_hFont;
-        break;
-
-    case WM_KEYDOWN:    HANDLE_WM_KEYDOWN(hWnd, wParam, lParam, OnKey); break;
-    case WM_KEYUP:      HANDLE_WM_KEYUP(hWnd, wParam, lParam, OnKey);   break;
-    case WM_CHAR:       HANDLE_WM_CHAR(hWnd, wParam, lParam, OnChar);   break;
-
-    case WM_LBUTTONDOWN:
-        {
-            const UINT nFlags = (UINT) wParam;
-            const POINT point = ToPoint(lParam);
-
-            // TODO shift, ctrl, etc.
-            DWORD nSelStart = m_nSelStart, nSelEnd = m_nSelEnd;
-            //OnGetSel(&nSelStart, &nSelEnd);
-            nSelEnd = EditCharFromPos(hWnd, point);
-            if (!(nFlags & MK_SHIFT))
-                nSelStart = nSelEnd;
-            OnSetSel(hWnd, nSelStart, nSelEnd);
-            SetCapture(hWnd);
-        }
-        break;
-
-    case WM_LBUTTONUP:
-        ReleaseCapture();
-        break;
-
-    case WM_MOUSEMOVE:
-        if (GetCapture() == hWnd)
-        {
-            const UINT nFlags = (UINT) wParam;
-            const POINT point = ToPoint(lParam);
-
-            // TODO Word select mode after a dbl click
-            // TODO Scroll window
-            DWORD nSelStart = m_nSelStart, nSelEnd = m_nSelEnd;
-            //OnGetSel(&nSelStart, &nSelEnd);
-            nSelEnd = EditCharFromPos(hWnd, point);
-            OnSetSel(hWnd, nSelStart, nSelEnd);
-        }
-        break;
-
-    case WM_MOUSEWHEEL:
-        {
-            const UINT fwKeys = GET_KEYSTATE_WPARAM(wParam);
-            const int zDelta = GET_WHEEL_DELTA_WPARAM(wParam);
-            const POINT point = ToPoint(lParam);
-
-            if ((fwKeys & (MK_CONTROL | MK_SHIFT)) == 0)
-            {
-                int nLines = MulDiv(zDelta, -3, WHEEL_DELTA);
-                SendMessage(hWnd, EM_LINESCROLL, 0, nLines);
-            }
-        }
-        break;
-
-    case EM_GETSEL:
-        return OnGetSel((LPDWORD) wParam, (LPDWORD) lParam);
-        break;
-
-    case EM_SETSEL:
-        OnSetSel(hWnd, (DWORD) wParam, (DWORD) lParam);
-        break;
-
-    // TODO case EM_GETRECT:
-    // TODO case EM_SETRECT:
-    // TODO case EM_SETRECTNP:
+    HANDLE_MSG(hWnd, EM_GETSEL,        OnGetSel);
+    HANDLE_MSG(hWnd, EM_SETSEL,        OnSetSel);
+    // TODO HANDLE_MSG(hWnd, EM_GETRECT, OnGetRect);
+    // TODO HANDLE_MSG(hWnd, EM_SETRECT, OnSetRect);
+    // TODO HANDLE_MSG(hWnd, EM_SETRECTNP, OnSetRectNP);
 
     case EM_SCROLL:
         {
@@ -767,7 +865,7 @@ LRESULT RadEdit::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         {
             const int nLine = TextLineFromChar(m_hText, m_nSelEnd);
 
-            SCROLLINFO vinfo = { sizeof(SCROLLINFO), SIF_POS }, hinfo = { sizeof(SCROLLINFO), SIF_POS };
+            SCROLLINFO vinfo = { sizeof(SCROLLINFO), SIF_POS | SIF_PAGE }, hinfo = { sizeof(SCROLLINFO), SIF_POS | SIF_PAGE };
             ENSURE(GetScrollInfo(hWnd, SB_VERT, &vinfo));
             ENSURE(GetScrollInfo(hWnd, SB_HORZ, &hinfo));
 
@@ -860,9 +958,9 @@ LRESULT RadEdit::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             const DWORD nLineEnd = TextLineEnd(m_hText, nLineIndex);
             const int nLineCount = min(nBufSize, nLineEnd - nLineIndex);
 
-            PCWSTR const buffer = (PCWSTR) GlobalLock(m_hText);
+            PCWSTR const buffer = (PCWSTR) LocalLock(m_hText);
             StrCpyN(copy, buffer + nLineIndex, nLineCount);
-            GlobalUnlock(m_hText);
+            LocalUnlock(m_hText);
             return nLineCount;
         }
         break;
@@ -941,12 +1039,12 @@ LRESULT RadEdit::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             SIZE sPos = {};
             {
                 HDC hDC = GetWindowDC(hWnd);
-                HFONT of = (HFONT) SelectObject(hDC, m_hFont);
-                PCWSTR const buffer = (PCWSTR) GlobalLock(m_hText);
+                HFONT of = SelectFont(hDC, m_hFont);
+                PCWSTR const buffer = (PCWSTR) LocalLock(m_hText);
                 int nCount = nChar - nLineIndex;
                 sPos = CalcTextSize(hDC, buffer + nLineIndex, nCount);
-                GlobalUnlock(m_hText);
-                SelectObject(hDC, of);
+                LocalUnlock(m_hText);
+                SelectFont(hDC, of);
                 ReleaseDC(hWnd, hDC);
             }
 
@@ -968,8 +1066,8 @@ LRESULT RadEdit::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 return 0;
 
             HDC hDC = GetWindowDC(hWnd);
-            HFONT of = (HFONT) SelectObject(hDC, m_hFont);
-            PCWSTR const buffer = (PCWSTR) GlobalLock(m_hText);
+            HFONT of = SelectFont(hDC, m_hFont);
+            PCWSTR const buffer = (PCWSTR) LocalLock(m_hText);
             const int nLineIndex = TextLineIndex(m_hText, nLine);
             if (nLineIndex < 0)
                 return MAKELRESULT(TextLength(m_hText), nLine);
@@ -977,8 +1075,8 @@ LRESULT RadEdit::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             const int nCount = nLineEnd - nLineIndex;
             const int x = pos.x + MyGetScrollPos(hWnd, SB_HORZ) * AveCharWidth() - AveCharWidth() / 2 - MarginLeft();
             const int nCol = x < 0 ? 0 : ::GetTabbedTextExtentEx(hDC, buffer + nLineIndex, nCount, m_nTabStops, m_rgTabStops, x);
-            GlobalUnlock(m_hText);
-            SelectObject(hDC, of);
+            LocalUnlock(m_hText);
+            SelectFont(hDC, of);
             ReleaseDC(hWnd, hDC);
 
             return MAKELRESULT(nLineIndex + nCol, nLine);
@@ -987,44 +1085,6 @@ LRESULT RadEdit::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
     // TODO case EM_SETIMESTATUS:
     // TODO case EM_GETIMESTATUS:
-
-    case WM_GETTEXTLENGTH:
-        return TextLength(m_hText);
-        break;
-
-    case WM_GETTEXT:
-        {
-            int nBufSize = (int) wParam;
-            LPTSTR copy = (LPTSTR) lParam;
-
-            PCWSTR const buffer = (PCWSTR) GlobalLock(m_hText);
-            StrCpyN(copy, buffer, nBufSize);
-            GlobalUnlock(m_hText);
-
-            return wcslen(copy);    // TODO capture size when copying
-        }
-        break;
-
-    case WM_SETTEXT:
-        {
-            LPCTSTR copy = (LPCTSTR) lParam;
-
-            HLOCAL hTextNew = TextCreate(copy);
-            if (hTextNew != NULL)
-            {
-                LocalFree(m_hText);
-                m_hText = hTextNew;
-                return TRUE;
-            }
-            else
-                return FALSE;
-        }
-        break;
-
-    // TODO case WM_CUT:
-    // TODO case WM_COPY:
-    // TODO case WM_PASTE:
-    // TODO case WM_CLEAR:
     }
 
     return DefWindowProc(hWnd, message, wParam, lParam);

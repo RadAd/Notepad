@@ -1,8 +1,10 @@
 #pragma once
 
 // TODO Consistently use DWORD for char pos
+// TODO Support unicode use CharPrev/CharNext or IsDBCSLeadByte
+// TODO Fix use LocalAlloc and LocalLock
 
-DWORD TextLength(HLOCAL hText);
+int TextLength(HLOCAL hText);
 
 int NewLineNextLength(PCWSTR buffer, int nIndex)
 {
@@ -46,9 +48,9 @@ int GetNextChar(PCWSTR buffer, int nIndex)
 
 int GetNextChar(HLOCAL hText, int nIndex)
 {
-    PCWSTR const buffer = (PCWSTR) GlobalLock(hText);
+    PCWSTR const buffer = (PCWSTR) LocalLock(hText);
     nIndex = GetNextChar(buffer, nIndex);
-    GlobalUnlock(hText);
+    LocalUnlock(hText);
     return nIndex;
 }
 
@@ -64,9 +66,9 @@ int GetPrevChar(PCWSTR buffer, int nIndex)
 
 int GetPrevChar(HLOCAL hText, int nIndex)
 {
-    PCWSTR const buffer = (PCWSTR) GlobalLock(hText);
+    PCWSTR const buffer = (PCWSTR) LocalLock(hText);
     nIndex = GetPrevChar(buffer, nIndex);
-    GlobalUnlock(hText);
+    LocalUnlock(hText);
     return nIndex;
 }
 
@@ -128,13 +130,13 @@ int MoveWord(EDITWORDBREAKPROC ewb, int code, HLOCAL hText, int nIndex)
 {
     ASSERT(ewb != nullptr);
     int iTextLength = TextLength(hText);
-    PWSTR const buffer = (PWSTR) GlobalLock(hText);
+    PWSTR const buffer = (PWSTR) LocalLock(hText);
     nIndex = ewb(buffer, nIndex, iTextLength, code);
     LocalUnlock(hText);
     return nIndex;
 }
 
-int GetNextLine(PCWSTR buffer, DWORD nIndex)
+int GetNextLine(PCWSTR buffer, int nIndex)
 {
     ASSERT(buffer != NULL);
 
@@ -142,13 +144,13 @@ int GetNextLine(PCWSTR buffer, DWORD nIndex)
     return end != nullptr ? static_cast<int>(end - buffer + 1) : -1;
 }
 
-DWORD GetLineStart(PCWSTR buffer, int nIndex)
+int GetLineStart(PCWSTR buffer, int nIndex)
 {
     PCWSTR const end = StrRChr(buffer, buffer + nIndex, L'\n'); // TODO Handle different line endings
     return end != nullptr ? static_cast<int>(end - buffer + 1) : 0;
 }
 
-DWORD GetLineEnd(PCWSTR buffer, int nIndex)
+int GetLineEnd(PCWSTR buffer, int nIndex)
 {
     PCWSTR end = StrChr(buffer + nIndex, L'\r'); // TODO Handle different line endings
     return end != nullptr ? static_cast<int>(end - buffer) : nIndex + (int) wcslen(buffer + nIndex);
@@ -157,20 +159,20 @@ DWORD GetLineEnd(PCWSTR buffer, int nIndex)
 HLOCAL TextCreate(PCWSTR const pText)
 {
     int nLength = (int) wcslen(pText) + 1;
-    HLOCAL hText = GlobalAlloc(GMEM_MOVEABLE, nLength * sizeof(WCHAR));
-    PWSTR const buffer = (PWSTR) GlobalLock(hText);
+    HLOCAL hText = LocalAlloc(LMEM_MOVEABLE, nLength * sizeof(WCHAR));
+    PWSTR const buffer = (PWSTR) LocalLock(hText);
     memcpy(buffer, pText, nLength * sizeof(WCHAR));
-    GlobalUnlock(hText);
+    LocalUnlock(hText);
     return hText;
 }
 
-DWORD TextLength(HLOCAL hText)
+int TextLength(HLOCAL hText)
 {
     ASSERT(hText != NULL);
 
-    PCWSTR const buffer = (PCWSTR) GlobalLock(hText);
+    PCWSTR const buffer = (PCWSTR) LocalLock(hText);
     int nLength = (int) wcslen(buffer);
-    GlobalUnlock(hText);
+    LocalUnlock(hText);
     return nLength;
 }
 
@@ -179,38 +181,38 @@ int TextLineCount(HLOCAL hText)
     ASSERT(hText != NULL);
 
     int nLine = 0;
-    PCWSTR const buffer = (PCWSTR) GlobalLock(hText);
+    PCWSTR const buffer = (PCWSTR) LocalLock(hText);
     int nIndex = 0;
     while (nIndex >= 0)
     {
         nIndex = GetNextLine(buffer, nIndex);
         ++nLine;
     }
-    GlobalUnlock(hText);
+    LocalUnlock(hText);
     return nLine;
 }
 
-DWORD TextLineStart(HLOCAL hText, DWORD nIndex)
+int TextLineStart(HLOCAL hText, int nIndex)
 {
     ASSERT(hText != NULL);
     ASSERT(nIndex >= 0);
     ASSERT(nIndex <= TextLength(hText));
 
-    PCWSTR const buffer = (PCWSTR) GlobalLock(hText);
+    PCWSTR const buffer = (PCWSTR) LocalLock(hText);
     nIndex = GetLineStart(buffer, nIndex);
-    GlobalUnlock(hText);
+    LocalUnlock(hText);
     return nIndex;
 }
 
-DWORD TextLineEnd(HLOCAL hText, DWORD nIndex)
+int TextLineEnd(HLOCAL hText, int nIndex)
 {
     ASSERT(hText != NULL);
     ASSERT(nIndex >= 0);
     ASSERT(nIndex <= TextLength(hText));
 
-    PCWSTR const buffer = (PCWSTR) GlobalLock(hText);
+    PCWSTR const buffer = (PCWSTR) LocalLock(hText);
     nIndex = GetLineEnd(buffer, nIndex);
-    GlobalUnlock(hText);
+    LocalUnlock(hText);
 
     return nIndex;
 }
@@ -221,7 +223,7 @@ int TextLineFromChar(HLOCAL hText, int nChar)
     ASSERT(nChar >= 0);
 
     int nLine = 0;
-    PCWSTR const buffer = (PCWSTR) GlobalLock(hText);
+    PCWSTR const buffer = (PCWSTR) LocalLock(hText);
     int nIndex = 0;
     while ((nIndex = GetNextLine(buffer, nIndex)) <= nChar)
     {
@@ -229,7 +231,7 @@ int TextLineFromChar(HLOCAL hText, int nChar)
             break;
         ++nLine;
     }
-    GlobalUnlock(hText);
+    LocalUnlock(hText);
     return nLine;
 }
 
@@ -238,18 +240,18 @@ int TextLineIndex(HLOCAL hText, int nLine)
     ASSERT(hText != NULL);
     ASSERT(nLine >= 0);
 
-    PCWSTR const buffer = (PCWSTR) GlobalLock(hText);
+    PCWSTR const buffer = (PCWSTR) LocalLock(hText);
     int nIndex = 0;
     while (nIndex >= 0 && nLine > 0)
     {
         nIndex = GetNextLine(buffer, nIndex);
         --nLine;
     }
-    GlobalUnlock(hText);
+    LocalUnlock(hText);
     return nIndex;
 }
 
-HLOCAL TextReplace(HLOCAL hText, const DWORD nStart, DWORD& nEnd, PCWSTR const pText)
+HLOCAL TextReplace(HLOCAL hText, const int nStart, DWORD& nEnd, PCWSTR const pText)
 {
     ASSERT(hText != NULL);
     ASSERT(nStart <= nEnd);
@@ -257,20 +259,20 @@ HLOCAL TextReplace(HLOCAL hText, const DWORD nStart, DWORD& nEnd, PCWSTR const p
 
     const int nTextLen = (int) wcslen(pText);
     const int nDiff = nTextLen - (nEnd - nStart);
-    const DWORD nLen = TextLength(hText);
+    const int nLen = TextLength(hText);
 
     ASSERT(nStart >= 0 && nStart <= nLen);
     ASSERT(nEnd >= 0 && nEnd <= nLen);
 
-    HLOCAL hTextNew = GlobalReAlloc(hText, (nLen + nDiff) * sizeof(WCHAR), GMEM_MOVEABLE);
+    HLOCAL hTextNew = LocalReAlloc(hText, (nLen + nDiff) * sizeof(WCHAR), LMEM_MOVEABLE);
     if (hTextNew == NULL)
         return NULL;
     hText = hTextNew;
 
-    PWSTR const buffer = (PWSTR) GlobalLock(hText);
+    PWSTR const buffer = (PWSTR) LocalLock(hText);
     memmove(buffer + nEnd + nDiff, buffer + nEnd, (nLen - nEnd) * sizeof(WCHAR));
     memcpy(buffer + nStart, pText, nTextLen * sizeof(WCHAR));
-    GlobalUnlock(hText);
+    LocalUnlock(hText);
 
     nEnd += nDiff;
 
