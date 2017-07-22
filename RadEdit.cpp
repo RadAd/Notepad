@@ -735,14 +735,11 @@ void RadEdit::OnCopy(HWND hWnd)
 
 void RadEdit::OnPaste(HWND hWnd)
 {
-   ReplaceSel(hWnd, L"One", TRUE);
    if (OpenClipboard(hWnd))
    {
-      ReplaceSel(hWnd, L"Two", TRUE);
        HGLOBAL hClip = GetClipboardData(CF_UNICODETEXT);
        if (hClip != NULL)
        {
-           ReplaceSel(hWnd, L"Three", TRUE);
            PCWSTR const buffer = (PCWSTR) GlobalLock(hClip);
            ReplaceSel(hWnd, buffer, TRUE);
            GlobalUnlock(hClip);

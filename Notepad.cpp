@@ -610,7 +610,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
             UINT Formats[] = { CF_UNICODETEXT, CF_TEXT, CF_OEMTEXT };
             BOOL bClipboard = GetPriorityClipboardFormat(Formats, ARRAYSIZE(Formats)) > 0;
-            EnableMenuItem(hMenu, ID_EDIT_PASTE, MF_BYCOMMAND | (bSelected ? MF_ENABLED : MF_DISABLED));
+            EnableMenuItem(hMenu, ID_EDIT_PASTE, MF_BYCOMMAND | (bClipboard ? MF_ENABLED : MF_DISABLED));
 
             BOOL bWordWrap = EditIsWordWrap(hEdit);
             CheckMenuItem(hMenu, ID_FORMAT_WORDWRAP, MF_BYCOMMAND | (bWordWrap ? MF_CHECKED : MF_UNCHECKED));
