@@ -644,17 +644,8 @@ void RadEdit::OnChar(HWND hWnd, TCHAR ch, int cRepeat)
 void RadEdit::OnLButtonDown(HWND hWnd, BOOL fDoubleClick, int x, int y, UINT keyFlags)
 {
    POINT point = { x, y };
+
    if (fDoubleClick)
-   {
-        DWORD nSelStart = m_nSelStart, nSelEnd = m_nSelEnd;
-        //OnGetSel(hWnd, &nSelStart, &nSelEnd);
-        nSelEnd = EditCharFromPos(hWnd, point);
-        if (!(keyFlags & MK_SHIFT))
-            nSelStart = nSelEnd;
-        OnSetSel(hWnd, nSelStart, nSelEnd);
-        SetCapture(hWnd);
-   }
-   else
    {
         DWORD nSelStart = m_nSelStart, nSelEnd = m_nSelEnd;
         //OnGetSel(hWnd, &nSelStart, &nSelEnd);
@@ -663,6 +654,16 @@ void RadEdit::OnLButtonDown(HWND hWnd, BOOL fDoubleClick, int x, int y, UINT key
         nSelStart = MoveWord(ewb, WB_LEFT, m_hText, nSelEnd);
         nSelEnd = MoveWord(ewb, WB_RIGHT, m_hText, nSelEnd);
         OnSetSel(hWnd, nSelStart, nSelEnd);
+   }
+   else
+   {
+        DWORD nSelStart = m_nSelStart, nSelEnd = m_nSelEnd;
+        //OnGetSel(hWnd, &nSelStart, &nSelEnd);
+        nSelEnd = EditCharFromPos(hWnd, point);
+        if (!(keyFlags & MK_SHIFT))
+            nSelStart = nSelEnd;
+        OnSetSel(hWnd, nSelStart, nSelEnd);
+        SetCapture(hWnd);
    }
 }
 
