@@ -258,7 +258,7 @@ HLOCAL TextReplace(HLOCAL hText, const int nStart, DWORD& nEnd, PCWSTR const pTe
 
     const int nTextLen = (int) wcslen(pText);
     const int nDiff = nTextLen - (nEnd - nStart);
-    const int nLen = TextLength(hText);
+    const int nLen = TextLength(hText) + 1;
 
     ASSERT(nStart >= 0 && nStart <= nLen);
     ASSERT(nEnd >= 0 && nEnd <= nLen);
