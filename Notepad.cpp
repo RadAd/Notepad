@@ -256,7 +256,7 @@ void FileOpen(HWND hWnd, HWND hEdit, LPCTSTR pszFileName)
     SetFileName(hWnd, pszFileName, eEncoding);
 }
 
-void FileSaveAs(HWND hWnd, HWND hEdit)
+BOOL FileSaveAs(HWND hWnd, HWND hEdit)
 {
     TCHAR szFileName[MAX_PATH] = TEXT("");
     _tcscpy_s(szFileName, g_szFileName);
@@ -268,10 +268,13 @@ void FileSaveAs(HWND hWnd, HWND hEdit)
         Edit_SetModify(hEdit, FALSE);
         Edit_EmptyUndoBuffer(hEdit);
         SetFileName(hWnd, szFileName, eEncoding);
+        return TRUE;
     }
+    else
+       return FALSE;
 }
 
-void FileSave(HWND hWnd, HWND hEdit)
+BOOL FileSave(HWND hWnd, HWND hEdit)
 {
     if (!IsEmpty(g_szFileName))
     {
@@ -279,9 +282,10 @@ void FileSave(HWND hWnd, HWND hEdit)
         SaveFile(hMem, g_szFileName, g_Encoding);
         Edit_SetModify(hEdit, FALSE);
         Edit_EmptyUndoBuffer(hEdit);
+        return TRUE;
     }
     else
-        FileSaveAs(hWnd, hEdit);
+        return FileSaveAs(hWnd, hEdit);
 }
 
 BOOL CheckSave(HWND hWnd, HWND hEdit)
@@ -295,8 +299,9 @@ BOOL CheckSave(HWND hWnd, HWND hEdit)
         FormatString(sBuffer, IDS_ASK_SAVE, pFileName);
         int id = MessageBox(hWnd, sBuffer, g_szTitle, MB_YESNOCANCEL);
         if (id == IDYES)
-            FileSave(hWnd, hEdit);
-        return id != IDCANCEL;
+            return FileSave(hWnd, hEdit);
+        else
+           return id != IDCANCEL;
     }
     else
         return TRUE;
