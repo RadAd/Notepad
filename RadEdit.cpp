@@ -152,6 +152,28 @@ public:
 
     LRESULT OnGetSel(HWND hWnd, LPDWORD pSelStart, LPDWORD pSelEnd) const;
     void OnSetSel(HWND hWnd, DWORD nSelStart, DWORD nSelEnd);
+    LRESULT OnScroll(HWND hWnd, UINT nSBCode);
+    LRESULT OnLineScroll(HWND hWnd, int nHScroll, int nVScroll);
+    void OnScrollCaret(HWND hWnd);
+    BOOL OnGetModify(HWND hWnd);
+    void OnSetModify(HWND hWnd, BOOL bModify);
+    DWORD OnGetLineCount(HWND hWnd);
+    DWORD OnLineIndex(HWND hWnd, int nLine);
+    void OnSetHandle(HWND hWnd, HLOCAL hText);
+    HLOCAL OnGetHandle(HWND hWnd);
+    DWORD OnGetThumb(HWND hWnd);
+    DWORD OnLineLength(HWND hWnd, int nIndex);
+    void OnReplaceSel(HWND hWnd, PCWSTR pText, BOOL bStoreUndo);
+    int OnGetLine(HWND hWnd, int nLine, PTCHAR copy, DWORD nBufSize);
+    DWORD OnLineFromChar(HWND hWnd, int nCharIndex);
+    BOOL OnSetTabStops(HWND hWnd, LPINT rgTabStops, int nTabStops);
+    DWORD OnGetFirstVisibleLine(HWND hWnd);
+    EDITWORDBREAKPROC OnGetWordBreakProc(HWND hWnd);
+    void OnSetWordBreakProc(HWND hWnd, EDITWORDBREAKPROC pEWP);
+    void OnSetMargins(HWND hWnd, UINT nFlags, UINT nLeftMargin, UINT nRightMargin);
+    LRESULT OnGetMargins(HWND hWnd);
+    LRESULT OnPosFromChar(HWND hWnd, DWORD nChar);
+    LRESULT OnCharFromPos(HWND hWnd, POINT pos);
 
     LRESULT WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 };
@@ -860,10 +882,277 @@ void RadEdit::OnSetSel(HWND hWnd, DWORD nSelStart, DWORD nSelEnd)
     InvalidateRect(hWnd, nullptr, TRUE);
 }
 
+LRESULT RadEdit::OnScroll(HWND hWnd, UINT nSBCode)
+{
+    OnScroll(hWnd, nSBCode, 0, NULL, SB_VERT);
+    // TODO Fix return
+    return 0;
+}
+
+LRESULT RadEdit::OnLineScroll(HWND hWnd, int nHScroll, int nVScroll)
+{
+    const int nBar = SB_VERT;
+
+    SCROLLINFO vinfo = { sizeof(SCROLLINFO), SIF_POS }, hinfo = { sizeof(SCROLLINFO), SIF_POS };
+    ENSURE(GetScrollInfo(hWnd, SB_VERT, &vinfo));
+    ENSURE(GetScrollInfo(hWnd, SB_HORZ, &hinfo));
+
+    vinfo.nPos += nVScroll;
+    hinfo.nPos += nHScroll;
+
+    SetScrollInfo(hWnd, SB_VERT, &vinfo, TRUE);
+    SetScrollInfo(hWnd, SB_HORZ, &hinfo, TRUE);
+
+    MoveCaret(hWnd);
+    InvalidateRect(hWnd, nullptr, TRUE);
+
+    return TRUE;    // Only multi-line supported
+}
+
+void RadEdit::OnScrollCaret(HWND hWnd)
+{
+    const int nLine = TextLineFromChar(m_hText, m_nSelEnd);
+
+    SCROLLINFO vinfo = { sizeof(SCROLLINFO), SIF_POS | SIF_PAGE }, hinfo = { sizeof(SCROLLINFO), SIF_POS | SIF_PAGE };
+    ENSURE(GetScrollInfo(hWnd, SB_VERT, &vinfo));
+    ENSURE(GetScrollInfo(hWnd, SB_HORZ, &hinfo));
+
+    // TODO Move all of the selection into view
+    if (vinfo.nPos > nLine)
+        vinfo.nPos = nLine;
+    else if ((vinfo.nPos + (int) vinfo.nPage) < nLine)
+        vinfo.nPos = nLine - vinfo.nPage;
+
+    SetScrollInfo(hWnd, SB_VERT, &vinfo, TRUE);
+    //SetScrollInfo(hWnd, SB_HORZ, &hinfo, TRUE);   // TODO
+
+    MoveCaret(hWnd);
+    InvalidateRect(hWnd, nullptr, TRUE);
+}
+
+BOOL RadEdit::OnGetModify(HWND hWnd)
+{
+    return m_bModify;
+}
+
+void RadEdit::OnSetModify(HWND hWnd, BOOL bModify)
+{
+    m_bModify = bModify;
+}
+
+DWORD RadEdit::OnGetLineCount(HWND hWnd)
+{
+    return TextLineCount(m_hText);
+}
+
+DWORD RadEdit::OnLineIndex(HWND hWnd, int nLine)
+{
+    if (nLine == -1)
+        return TextLineStart(m_hText, m_nSelEnd);
+    else
+        return TextLineIndex(m_hText, nLine);
+}
+
+void RadEdit::OnSetHandle(HWND hWnd, HLOCAL hText)
+{
+    m_hText = hText;
+    Edit_EmptyUndoBuffer(hWnd);
+    Edit_SetModify(hWnd, FALSE);
+    CalcScrollBars(hWnd);
+    SetScrollPos(hWnd, SB_VERT, 0, TRUE);
+    SetScrollPos(hWnd, SB_HORZ, 0, TRUE);
+    Edit_SetSel(0, 0, TRUE);
+    Edit_ScrollCaret(hWnd);
+}
+
+HLOCAL RadEdit::OnGetHandle(HWND hWnd)
+{
+    return m_hText;
+}
+
+DWORD RadEdit::OnGetThumb(HWND hWnd)
+{
+    return MyGetScrollPos(hWnd, SB_VERT);
+}
+
+DWORD RadEdit::OnLineLength(HWND hWnd, int nIndex)
+{
+    // TODO When nIndex == -1
+
+    if (nIndex > TextLength(m_hText))
+        return -1;
+
+    const DWORD nLineStart = TextLineStart(m_hText, nIndex);
+    const DWORD nLineEnd = TextLineEnd(m_hText, nIndex);
+
+    return nLineEnd - nLineStart;
+}
+
+void RadEdit::OnReplaceSel(HWND hWnd, PCWSTR pText, BOOL bStoreUndo)
+{
+    ReplaceSel(hWnd, pText, bStoreUndo);
+}
+
+int RadEdit::OnGetLine(HWND hWnd, int nLine, PTCHAR copy, DWORD nBufSize)
+{
+    // TODO Support TCHAR
+
+    const DWORD nLineIndex = TextLineIndex(m_hText, nLine);
+    // TODO if nLineIndex  == -1
+    const DWORD nLineEnd = TextLineEnd(m_hText, nLineIndex);
+    const int nLineCount = min(nBufSize, nLineEnd - nLineIndex);
+
+    PCWSTR const buffer = (PCWSTR) LocalLock(m_hText);
+    StrCpyN(copy, buffer + nLineIndex, nLineCount);
+    LocalUnlock(m_hText);
+    return nLineCount;
+}
+
+DWORD RadEdit::OnLineFromChar(HWND hWnd, int nCharIndex)
+{
+    if (nCharIndex == -1)
+        nCharIndex = m_nSelEnd;
+    return TextLineFromChar(m_hText, nCharIndex);
+}
+
+BOOL RadEdit::OnSetTabStops(HWND hWnd, LPINT rgTabStops, int nTabStops)
+{
+    m_nTabStops = nTabStops;
+    //memcpy(m_rgTabStops, rgTabStops, nTabStops * sizeof(INT));
+    LONG nBaseUnits = LOWORD(GetDialogBaseUnits());
+    int cs = AveCharWidth() * 2;
+    for (int i = 0; i < nTabStops; ++i)
+        m_rgTabStops[i] = MulDiv(rgTabStops[i], cs, nBaseUnits);
+    return TRUE;
+}
+
+DWORD RadEdit::OnGetFirstVisibleLine(HWND hWnd)
+{
+    return MyGetScrollPos(hWnd, SB_VERT);
+}
+
+EDITWORDBREAKPROC RadEdit::OnGetWordBreakProc(HWND hWnd)
+{
+    return m_pEditWordBreakProc;
+}
+
+void RadEdit::OnSetWordBreakProc(HWND hWnd, EDITWORDBREAKPROC pEWB)
+{
+    m_pEditWordBreakProc = pEWB;
+}
+
+void RadEdit::OnSetMargins(HWND hWnd, UINT nFlags, UINT nLeftMargin, UINT nRightMargin)
+{
+    if (nFlags & EC_LEFTMARGIN)
+        m_nMarginLeft = nLeftMargin;
+    if (nFlags & EC_RIGHTMARGIN)
+        m_nMarginRight = nRightMargin;
+}
+
+LRESULT RadEdit::OnGetMargins(HWND hWnd)
+{
+    return MAKELRESULT(m_nMarginLeft, m_nMarginRight);
+}
+
+LRESULT RadEdit::OnPosFromChar(HWND hWnd, DWORD nChar)
+{
+    // TODO Take into account the margins
+
+    const int nLine = TextLineFromChar(m_hText, nChar);
+    const DWORD nLineIndex = TextLineStart(m_hText, nChar);
+
+    SIZE sPos = {};
+    {
+        HDC hDC = GetWindowDC(hWnd);
+        HFONT of = SelectFont(hDC, m_hFont);
+        PCWSTR const buffer = (PCWSTR) LocalLock(m_hText);
+        int nCount = nChar - nLineIndex;
+        sPos = CalcTextSize(hDC, buffer + nLineIndex, nCount);
+        LocalUnlock(m_hText);
+        SelectFont(hDC, of);
+        ReleaseDC(hWnd, hDC);
+    }
+
+    const int nFirstLine = Edit_GetFirstVisibleLine(hWnd);  // TODO Use message ???
+    POINT p = { sPos.cx - MyGetScrollPos(hWnd, SB_HORZ) * AveCharWidth() + MarginLeft(), (nLine - nFirstLine) * LineHeight() };
+    return MAKELRESULT(p.x, p.y);
+}
+
+LRESULT RadEdit::OnCharFromPos(HWND hWnd, POINT pos)
+{
+    // TODO Take into account the margins
+
+    const int nFirstLine = Edit_GetFirstVisibleLine(hWnd);  // TODO Use message ???
+    const int nLine = nFirstLine + pos.y / LineHeight();
+    if (nLine < 0)
+        return 0;
+
+    HDC hDC = GetWindowDC(hWnd);
+    HFONT of = SelectFont(hDC, m_hFont);
+    PCWSTR const buffer = (PCWSTR) LocalLock(m_hText);
+    const int nLineIndex = TextLineIndex(m_hText, nLine);
+    if (nLineIndex < 0)
+        return MAKELRESULT(TextLength(m_hText), nLine);
+    const DWORD nLineEnd = TextLineEnd(m_hText, nLineIndex);
+    const int nCount = nLineEnd - nLineIndex;
+    const int x = pos.x + MyGetScrollPos(hWnd, SB_HORZ) * AveCharWidth() - AveCharWidth() / 2 - MarginLeft();
+    const int nCol = x < 0 ? 0 : ::GetTabbedTextExtentEx(hDC, buffer + nLineIndex, nCount, m_nTabStops, m_rgTabStops, x);
+    LocalUnlock(m_hText);
+    SelectFont(hDC, of);
+    ReleaseDC(hWnd, hDC);
+
+    return MAKELRESULT(nLineIndex + nCol, nLine);
+}
+
 #define HANDLE_EM_GETSEL(hWnd, wParam, lParam, fn) \
     (LRESULT)(fn)(hWnd, (LPDWORD) wParam, (LPDWORD) lParam)
 #define HANDLE_EM_SETSEL(hWnd, wParam, lParam, fn) \
     ((fn)(hWnd, (DWORD) wParam, (DWORD) lParam), 0L)
+#define HANDLE_EM_SCROLL(hWnd, wParam, lParam, fn) \
+    (fn)(hWnd, (UINT) wParam)
+#define HANDLE_EM_LINESCROLL(hWnd, wParam, lParam, fn) \
+    (fn)(hWnd, (int) wParam, (int) lParam)
+#define HANDLE_EM_SCROLLCARET(hWnd, wParam, lParam, fn) \
+    ((fn)(hWnd), 0L)
+#define HANDLE_EM_GETMODIFY(hWnd, wParam, lParam, fn) \
+    (fn)(hWnd)
+#define HANDLE_EM_SETMODIFY(hWnd, wParam, lParam, fn) \
+    ((fn)(hWnd, (BOOL) wParam), 0L)
+#define HANDLE_EM_GETLINECOUNT(hWnd, wParam, lParam, fn) \
+    (fn)(hWnd)
+#define HANDLE_EM_LINEINDEX(hWnd, wParam, lParam, fn) \
+    (fn)(hWnd, (int) wParam)
+#define HANDLE_EM_SETHANDLE(hWnd, wParam, lParam, fn) \
+    ((fn)(hWnd, (HLOCAL) wParam), 0L)
+#define HANDLE_EM_GETHANDLE(hWnd, wParam, lParam, fn) \
+    (LRESULT)(fn)(hWnd)
+#define HANDLE_EM_GETTHUMB(hWnd, wParam, lParam, fn) \
+    (fn)(hWnd)
+#define HANDLE_EM_LINELENGTH(hWnd, wParam, lParam, fn) \
+    (fn)(hWnd, (int) wParam)
+#define HANDLE_EM_REPLACESEL(hWnd, wParam, lParam, fn) \
+    ((fn)(hWnd, (PCTSTR) lParam, (BOOL) wParam), 0L)
+#define HANDLE_EM_GETLINE(hWnd, wParam, lParam, fn) \
+    (fn)(hWnd, (int) wParam, (PTCHAR) lParam, *(LPWORD) lParam)
+
+#define HANDLE_EM_LINEFROMCHAR(hWnd, wParam, lParam, fn) \
+    (fn)(hWnd, (int) wParam)
+#define HANDLE_EM_SETTABSTOPS(hWnd, wParam, lParam, fn) \
+    (fn)(hWnd, (LPINT) lParam, (int) wParam)
+#define HANDLE_EM_GETFIRSTVISIBLELINE(hWnd, wParam, lParam, fn) \
+    (fn)(hWnd)
+#define HANDLE_EM_GETWORDBREAKPROC(hWnd, wParam, lParam, fn) \
+    (LRESULT)(fn)(hWnd)
+#define HANDLE_EM_SETWORDBREAKPROC(hWnd, wParam, lParam, fn) \
+    ((fn)(hWnd, (EDITWORDBREAKPROC) lParam), 0)
+#define HANDLE_EM_SETMARGINS(hWnd, wParam, lParam, fn) \
+    ((fn)(hWnd, (UINT) wParam, LOWORD(lParam), HIWORD(lParam)), 0)
+#define HANDLE_EM_GETMARGINS(hWnd, wParam, lParam, fn) \
+    (fn)(hWnd)
+#define HANDLE_EM_POSFROMCHAR(hWnd, wParam, lParam, fn) \
+    (fn)(hWnd, (DWORD) wParam)
+#define HANDLE_EM_CHARFROMPOS(hWnd, wParam, lParam, fn) \
+    (fn)(hWnd, ToPoint(lParam))
 
 LRESULT RadEdit::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
@@ -902,264 +1191,42 @@ LRESULT RadEdit::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     // TODO HANDLE_MSG(hWnd, EM_GETRECT, OnGetRect);
     // TODO HANDLE_MSG(hWnd, EM_SETRECT, OnSetRect);
     // TODO HANDLE_MSG(hWnd, EM_SETRECTNP, OnSetRectNP);
-
-    case EM_SCROLL:
-        {
-            UINT nSBCode = (UINT) wParam;
-            OnScroll(hWnd, nSBCode, 0, NULL, SB_VERT);
-        }
-        break;
-
-    case EM_LINESCROLL:
-        {
-            int nHScroll = (int) wParam;
-            int nVScroll = (int) lParam;
-
-            const int nBar = SB_VERT;
-
-            SCROLLINFO vinfo = { sizeof(SCROLLINFO), SIF_POS }, hinfo = { sizeof(SCROLLINFO), SIF_POS };
-            ENSURE(GetScrollInfo(hWnd, SB_VERT, &vinfo));
-            ENSURE(GetScrollInfo(hWnd, SB_HORZ, &hinfo));
-
-            vinfo.nPos += nVScroll;
-            hinfo.nPos += nHScroll;
-
-            SetScrollInfo(hWnd, SB_VERT, &vinfo, TRUE);
-            SetScrollInfo(hWnd, SB_HORZ, &hinfo, TRUE);
-
-            MoveCaret(hWnd);
-            InvalidateRect(hWnd, nullptr, TRUE);
-
-            return TRUE;    // Only multi-line supported
-        }
-
-    case EM_SCROLLCARET:
-        {
-            const int nLine = TextLineFromChar(m_hText, m_nSelEnd);
-
-            SCROLLINFO vinfo = { sizeof(SCROLLINFO), SIF_POS | SIF_PAGE }, hinfo = { sizeof(SCROLLINFO), SIF_POS | SIF_PAGE };
-            ENSURE(GetScrollInfo(hWnd, SB_VERT, &vinfo));
-            ENSURE(GetScrollInfo(hWnd, SB_HORZ, &hinfo));
-
-            // TODO Move all of the selection into view
-            if (vinfo.nPos > nLine)
-                vinfo.nPos = nLine;
-            else if ((vinfo.nPos + (int) vinfo.nPage) < nLine)
-                vinfo.nPos = nLine - vinfo.nPage;
-
-            SetScrollInfo(hWnd, SB_VERT, &vinfo, TRUE);
-            //SetScrollInfo(hWnd, SB_HORZ, &hinfo, TRUE);   // TODO
-
-            MoveCaret(hWnd);
-            InvalidateRect(hWnd, nullptr, TRUE);
-
-            return 0;
-        }
-        break;
-
-    case EM_GETMODIFY:
-        return m_bModify;
-        break;
-
-    case EM_SETMODIFY:
-        m_bModify = (BOOL) wParam;
-        break;
-
-    case EM_GETLINECOUNT:
-        return TextLineCount(m_hText);
-        break;
-
-    case EM_LINEINDEX:
-        {
-            int nLine = (int) wParam;
-            if (nLine == -1)
-                return TextLineStart(m_hText, m_nSelEnd);
-            else
-                return TextLineIndex(m_hText, nLine);
-        }
-        break;
-
-    case EM_SETHANDLE:
-        m_hText = (HLOCAL) wParam;
-        Edit_EmptyUndoBuffer(hWnd);
-        Edit_SetModify(hWnd, FALSE);
-        CalcScrollBars(hWnd);
-        SetScrollPos(hWnd, SB_VERT, 0, TRUE);
-        SetScrollPos(hWnd, SB_HORZ, 0, TRUE);
-        Edit_SetSel(0, 0, TRUE);
-        Edit_ScrollCaret(hWnd);
-        break;
-
-    case EM_GETHANDLE:
-        return (LRESULT) m_hText;
-        break;
-
-    case EM_GETTHUMB:
-        return MyGetScrollPos(hWnd, SB_VERT);
-        break;
-
-    case EM_LINELENGTH:
-        {
-            const DWORD nIndex = (DWORD) wParam;
-            // TODO When nLine == -1
-
-            if (nIndex > TextLength(m_hText))
-                return -1;
-
-            const DWORD nLineStart = TextLineStart(m_hText, nIndex);
-            const DWORD nLineEnd = TextLineEnd(m_hText, nIndex);
-
-            return nLineEnd - nLineStart;
-        }
-        break;
-
-    case EM_REPLACESEL:
-        ReplaceSel(hWnd, (PCTSTR) lParam, (BOOL) wParam);
-        return 0;
-        break;
-
-    case EM_GETLINE:
-        {
-            // TODO Support TCHAR
-            int nLine = (int) wParam;
-            DWORD nBufSize = *(LPWORD) lParam;
-            PTCHAR copy = (PTCHAR) lParam;
-
-            const DWORD nLineIndex = TextLineIndex(m_hText, nLine);
-            // TODO if nLineIndex  == -1
-            const DWORD nLineEnd = TextLineEnd(m_hText, nLineIndex);
-            const int nLineCount = min(nBufSize, nLineEnd - nLineIndex);
-
-            PCWSTR const buffer = (PCWSTR) LocalLock(m_hText);
-            StrCpyN(copy, buffer + nLineIndex, nLineCount);
-            LocalUnlock(m_hText);
-            return nLineCount;
-        }
-        break;
-
-    // TODO case EM_LIMITTEXT: // Same as EM_SETLIMITTEXT
-    // TODO case EM_CANUNDO:
-    // TODO case EM_UNDO:
-    // TODO case EM_FMTLINES:
-
-    case EM_LINEFROMCHAR:
-        {
-            int nCharIndex = (int) wParam;
-            if (nCharIndex == -1)
-                nCharIndex = m_nSelEnd;
-            return TextLineFromChar(m_hText, nCharIndex);
-        }
-        break;
-
-    case EM_SETTABSTOPS:
-        {
-            const int nTabStops = (int) wParam;
-            const LPINT rgTabStops = (LPINT) lParam;
-
-            m_nTabStops = nTabStops;
-            //memcpy(m_rgTabStops, rgTabStops, nTabStops * sizeof(INT));
-            LONG nBaseUnits = LOWORD(GetDialogBaseUnits());
-            int cs = AveCharWidth() * 2;
-            for (int i = 0; i < nTabStops; ++i)
-                m_rgTabStops[i] = MulDiv(rgTabStops[i], cs, nBaseUnits);
-            return TRUE;
-        }
-        break;
-
-    // TODO case EM_SETPASSWORDCHAR:  // Ignore
-    // TODO case EM_EMPTYUNDOBUFFER:
-
-    case EM_GETFIRSTVISIBLELINE:
-        return MyGetScrollPos(hWnd, SB_VERT);
-        break;
-
-    // TODO case EM_SETREADONLY:
-
-    case EM_GETWORDBREAKPROC:
-        return (LRESULT) m_pEditWordBreakProc;
-        break;
-
-    case EM_SETWORDBREAKPROC:
-        m_pEditWordBreakProc = (EDITWORDBREAKPROC) lParam;
-        break;
-
-    // TODO case EM_GETPASSWORDCHAR:  // Ignore
-
-    case EM_SETMARGINS:
-        if (wParam & EC_LEFTMARGIN)
-            m_nMarginLeft = LOWORD(lParam);
-        if (wParam & EC_RIGHTMARGIN)
-            m_nMarginRight = HIWORD(lParam);
-        break;
-
-    case EM_GETMARGINS:
-        return MAKELRESULT(m_nMarginLeft, m_nMarginRight);
-        break;
-
-    // TODO case EM_SETLIMITTEXT:  // Ignore
-    // TODO case EM_GETLIMITTEXT:
-
-    case EM_POSFROMCHAR:
-        {
-            DWORD nChar = (DWORD) wParam;
-
-            // TODO Take into account the margins
-
-            const int nLine = TextLineFromChar(m_hText, nChar);
-            const DWORD nLineIndex = TextLineStart(m_hText, nChar);
-
-            SIZE sPos = {};
-            {
-                HDC hDC = GetWindowDC(hWnd);
-                HFONT of = SelectFont(hDC, m_hFont);
-                PCWSTR const buffer = (PCWSTR) LocalLock(m_hText);
-                int nCount = nChar - nLineIndex;
-                sPos = CalcTextSize(hDC, buffer + nLineIndex, nCount);
-                LocalUnlock(m_hText);
-                SelectFont(hDC, of);
-                ReleaseDC(hWnd, hDC);
-            }
-
-            const int nFirstLine = Edit_GetFirstVisibleLine(hWnd);  // TODO Use message ???
-            POINT p = { sPos.cx - MyGetScrollPos(hWnd, SB_HORZ) * AveCharWidth() + MarginLeft(), (nLine - nFirstLine) * LineHeight() };
-            return MAKELRESULT(p.x, p.y);
-        }
-        break;
-
-    case EM_CHARFROMPOS:
-        {
-            const POINT pos = ToPoint(lParam);
-
-            // TODO Take into account the margins
-
-            const int nFirstLine = Edit_GetFirstVisibleLine(hWnd);  // TODO Use message ???
-            const int nLine = nFirstLine + pos.y / LineHeight();
-            if (nLine < 0)
-                return 0;
-
-            HDC hDC = GetWindowDC(hWnd);
-            HFONT of = SelectFont(hDC, m_hFont);
-            PCWSTR const buffer = (PCWSTR) LocalLock(m_hText);
-            const int nLineIndex = TextLineIndex(m_hText, nLine);
-            if (nLineIndex < 0)
-                return MAKELRESULT(TextLength(m_hText), nLine);
-            const DWORD nLineEnd = TextLineEnd(m_hText, nLineIndex);
-            const int nCount = nLineEnd - nLineIndex;
-            const int x = pos.x + MyGetScrollPos(hWnd, SB_HORZ) * AveCharWidth() - AveCharWidth() / 2 - MarginLeft();
-            const int nCol = x < 0 ? 0 : ::GetTabbedTextExtentEx(hDC, buffer + nLineIndex, nCount, m_nTabStops, m_rgTabStops, x);
-            LocalUnlock(m_hText);
-            SelectFont(hDC, of);
-            ReleaseDC(hWnd, hDC);
-
-            return MAKELRESULT(nLineIndex + nCol, nLine);
-        }
-        break;
-
-    // TODO case EM_SETIMESTATUS:
-    // TODO case EM_GETIMESTATUS:
+    HANDLE_MSG(hWnd, EM_SCROLL,        OnScroll);
+    HANDLE_MSG(hWnd, EM_LINESCROLL,    OnLineScroll);
+    HANDLE_MSG(hWnd, EM_SCROLLCARET,   OnScrollCaret);
+    HANDLE_MSG(hWnd, EM_GETMODIFY,     OnGetModify);
+    HANDLE_MSG(hWnd, EM_SETMODIFY,     OnSetModify);
+    HANDLE_MSG(hWnd, EM_GETLINECOUNT,  OnGetLineCount);
+    HANDLE_MSG(hWnd, EM_LINEINDEX,     OnLineIndex);
+    HANDLE_MSG(hWnd, EM_SETHANDLE,     OnSetHandle);
+    HANDLE_MSG(hWnd, EM_GETHANDLE,     OnGetHandle);
+    HANDLE_MSG(hWnd, EM_GETTHUMB,      OnGetThumb);
+    HANDLE_MSG(hWnd, EM_LINELENGTH,    OnLineLength);
+    HANDLE_MSG(hWnd, EM_REPLACESEL,    OnReplaceSel);
+    HANDLE_MSG(hWnd, EM_GETLINE,       OnGetLine);
+    // TODO HANDLE_MSG(hWnd, EM_LIMITTEXT, OnLimitText);  // Same as EM_SETLIMITTEXT
+    // TODO HANDLE_MSG(hWnd, EM_CANUNDO, OnCanUndo);
+    // TODO HANDLE_MSG(hWnd, EM_UNDO, OnUndo);
+    // TODO HANDLE_MSG(hWnd, EM_FMTLINES, OnFmtLines);
+    HANDLE_MSG(hWnd, EM_LINEFROMCHAR, OnLineFromChar);
+    HANDLE_MSG(hWnd, EM_SETTABSTOPS, OnSetTabStops);
+    // TODO HANDLE_MSG(hWnd, EM_SETPASSWORDCHAR, OnSetPasswordChar);  // Ignore
+    // TODO HANDLE_MSG(hWnd, EM_EMPTYUNDOBUFFER, OnEmptyUndoBuffer);
+    HANDLE_MSG(hWnd, EM_GETFIRSTVISIBLELINE, OnGetFirstVisibleLine);
+    // TODO HANDLE_MSG(hWnd, EM_SETREADONLY, OnSetReadOnly);
+    HANDLE_MSG(hWnd, EM_GETWORDBREAKPROC, OnGetWordBreakProc);
+    HANDLE_MSG(hWnd, EM_SETWORDBREAKPROC, OnSetWordBreakProc);
+    // TODO HANDLE_MSG(hWnd, EM_GETPASSWORDCHAR, OnGetPasswordChar);
+    HANDLE_MSG(hWnd, EM_SETMARGINS, OnSetMargins);
+    HANDLE_MSG(hWnd, EM_GETMARGINS, OnGetMargins);
+    //HANDLE_MSG(hWnd, EM_SETLIMITTEXT, OnSetLimitText);  // Ignore
+    //HANDLE_MSG(hWnd, EM_GETLIMITTEXT, OnGetLimitText);
+    HANDLE_MSG(hWnd, EM_POSFROMCHAR, OnPosFromChar);
+    HANDLE_MSG(hWnd, EM_CHARFROMPOS, OnCharFromPos);
+    //HANDLE_MSG(hWnd, EM_SETIMESTATUS, OnSetIMEStatus);
+    //HANDLE_MSG(hWnd, EM_GETIMESTATUS, OnGetIMEStatus);
+    default: return DefWindowProc(hWnd, message, wParam, lParam);
     }
-
-    return DefWindowProc(hWnd, message, wParam, lParam);
 }
 
 LRESULT CALLBACK RadEditWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
