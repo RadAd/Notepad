@@ -5,20 +5,25 @@
 #include <intsafe.h>
 
 // TODO
-// WM_WANTKEYS https://blogs.msdn.microsoft.com/oldnewthing/20031126-00/?p=41703
 // Check parent notifications EN_*
 // Support IME
 // Context menu
 // Support word wrap
-// readonly
+// ES_READONLY
+// ES_LEFT, ES_CENTER, ES_RIGHT
+// ES_UPPERCASE, ES_LOWERCASE
+// ES_AUTOVSCROLL, ES_AUTOVSCROLL not set
 // ES_NOHIDESEL
+// ES_OEMCONVERT
+// ES_WANTRETURN
+// ES_NUMBER
 
 // NOT Implemented:
 // limit text
 // single line
 // cue banner
-// password char
-// ballon tool tip
+// ES_PASSWORD
+// balloon tool tip
 
 LONG GetWidth(const RECT& r)
 {
@@ -121,6 +126,8 @@ private:
     void MoveCaret(HWND hWnd) const;
     void Draw(HWND hWnd, HDC hDC) const;
     void ReplaceSel(HWND hWnd, PCWSTR pText, BOOL bStoreUndo);
+    DWORD GetFirstVisibleLine(HWND hWnd) const;
+    DWORD GetFirstVisibleCol(HWND hWnd) const;
 
 public:
     BOOL OnCreate(HWND hWnd, LPCREATESTRUCT lpCreateStruct);
@@ -149,6 +156,7 @@ public:
     void OnPaste(HWND hWnd);
     void OnClear(HWND hWnd);
     void OnSetRedraw(HWND hwnd, BOOL fRedraw);
+    UINT OnGetDlgCode(HWND hWnd, LPMSG pMsg);
 
     LRESULT OnGetSel(HWND hWnd, LPDWORD pSelStart, LPDWORD pSelEnd) const;
     void OnSetSel(HWND hWnd, DWORD nSelStart, DWORD nSelEnd);
@@ -168,6 +176,7 @@ public:
     DWORD OnLineFromChar(HWND hWnd, int nCharIndex);
     BOOL OnSetTabStops(HWND hWnd, LPINT rgTabStops, int nTabStops);
     DWORD OnGetFirstVisibleLine(HWND hWnd);
+    BOOL OnSetReadOnly(HWND hWnd, BOOL bReadOnly);
     EDITWORDBREAKPROC OnGetWordBreakProc(HWND hWnd);
     void OnSetWordBreakProc(HWND hWnd, EDITWORDBREAKPROC pEWP);
     void OnSetMargins(HWND hWnd, UINT nFlags, UINT nLeftMargin, UINT nRightMargin);
@@ -248,9 +257,9 @@ void RadEdit::Draw(HWND hWnd, HDC hDC) const
     DWORD nSelStart, nSelEnd;
     OnGetSel(hWnd, &nSelStart, &nSelEnd);
 
-    POINT p = { -MyGetScrollPos(hWnd, SB_HORZ) * AveCharWidth() + MarginLeft(), 0 };
+    POINT p = { -(int) GetFirstVisibleCol(hWnd) * AveCharWidth() + MarginLeft(), 0 };
     PCWSTR const buffer = (PCWSTR) LocalLock(m_hText);
-    const int nFirstLine = Edit_GetFirstVisibleLine(hWnd);  // TODO Use message ???
+    const int nFirstLine = GetFirstVisibleLine(hWnd);
     int nIndex = TextLineIndex(m_hText, nFirstLine);
     while (nIndex >= 0)
     {
@@ -301,6 +310,16 @@ void RadEdit::ReplaceSel(HWND hWnd, PCWSTR pText, BOOL /*bStoreUndo*/)
         else
             NotifyParent(hWnd, EN_ERRSPACE);
     }
+}
+
+DWORD RadEdit::GetFirstVisibleLine(HWND hWnd) const
+{
+    return MyGetScrollPos(hWnd, SB_VERT);
+}
+
+DWORD RadEdit::GetFirstVisibleCol(HWND hWnd) const
+{
+    return MyGetScrollPos(hWnd, SB_HORZ);
 }
 
 UINT DoScroll(UINT nSBCode, const SCROLLINFO& info)
@@ -481,10 +500,8 @@ void RadEdit::OnKey(HWND hWnd, UINT vk, BOOL fDown, int cRepeat, UINT flags)
     switch (vk)
     {
     case VK_LEFT:
-        // TODO Move over end of line
         if (!bAlt)
         {
-            // TODO if (bCtrl) Move to prev word
             int nSelStart = m_nSelStart, nSelEnd = m_nSelEnd;
             nSelEnd = GetPrevChar(m_hText, nSelEnd);
             if (bCtrl && nSelEnd >= 0)
@@ -503,10 +520,8 @@ void RadEdit::OnKey(HWND hWnd, UINT vk, BOOL fDown, int cRepeat, UINT flags)
         break;
 
     case VK_RIGHT:
-        // TODO Move over end of line
         if (!bAlt)
         {
-            // TODO if (bCtrl) Move to next word
             int nSelStart = m_nSelStart, nSelEnd = m_nSelEnd;
             nSelEnd = GetNextChar(m_hText, nSelEnd);
             if (bCtrl && nSelEnd >= 0)
@@ -848,6 +863,11 @@ void RadEdit::OnSetRedraw(HWND hWnd, BOOL fRedraw)
         InvalidateRect(hWnd, NULL, TRUE);
 }
 
+UINT RadEdit::OnGetDlgCode(HWND hWnd, LPMSG pMsg)
+{
+    return DLGC_HASSETSEL | DLGC_WANTALLKEYS | DLGC_WANTARROWS | DLGC_WANTCHARS | DLGC_WANTTAB;
+}
+
 LRESULT RadEdit::OnGetSel(HWND hWnd, LPDWORD pSelStart, LPDWORD pSelEnd) const
 {
     DWORD nStart = min(m_nSelStart, m_nSelEnd);
@@ -962,7 +982,7 @@ void RadEdit::OnSetHandle(HWND hWnd, HLOCAL hText)
     SetScrollPos(hWnd, SB_VERT, 0, TRUE);
     SetScrollPos(hWnd, SB_HORZ, 0, TRUE);
     Edit_SetSel(0, 0, TRUE);
-    Edit_ScrollCaret(hWnd);
+    //Edit_ScrollCaret(hWnd);
 }
 
 HLOCAL RadEdit::OnGetHandle(HWND hWnd)
@@ -1028,7 +1048,18 @@ BOOL RadEdit::OnSetTabStops(HWND hWnd, LPINT rgTabStops, int nTabStops)
 
 DWORD RadEdit::OnGetFirstVisibleLine(HWND hWnd)
 {
-    return MyGetScrollPos(hWnd, SB_VERT);
+    return GetFirstVisibleLine(hWnd);
+}
+
+BOOL RadEdit::OnSetReadOnly(HWND hWnd, BOOL bReadOnly)
+{
+    int style = GetWindowStyle(hWnd);
+    if (bReadOnly)
+        style |= ES_READONLY;
+    else
+        style &= ~ES_READONLY;
+    SetWindowLong(hWnd, GWL_STYLE, style);
+    return TRUE;
 }
 
 EDITWORDBREAKPROC RadEdit::OnGetWordBreakProc(HWND hWnd)
@@ -1073,8 +1104,8 @@ LRESULT RadEdit::OnPosFromChar(HWND hWnd, DWORD nChar)
         ReleaseDC(hWnd, hDC);
     }
 
-    const int nFirstLine = Edit_GetFirstVisibleLine(hWnd);  // TODO Use message ???
-    POINT p = { sPos.cx - MyGetScrollPos(hWnd, SB_HORZ) * AveCharWidth() + MarginLeft(), (nLine - nFirstLine) * LineHeight() };
+    const int nFirstLine = GetFirstVisibleLine(hWnd);
+    POINT p = { sPos.cx - (int) GetFirstVisibleCol(hWnd) * AveCharWidth() + MarginLeft(), (nLine - nFirstLine) * LineHeight() };
     return MAKELRESULT(p.x, p.y);
 }
 
@@ -1082,7 +1113,7 @@ LRESULT RadEdit::OnCharFromPos(HWND hWnd, POINT pos)
 {
     // TODO Take into account the margins
 
-    const int nFirstLine = Edit_GetFirstVisibleLine(hWnd);  // TODO Use message ???
+    const int nFirstLine = GetFirstVisibleLine(hWnd);
     const int nLine = nFirstLine + pos.y / LineHeight();
     if (nLine < 0)
         return 0;
@@ -1095,7 +1126,7 @@ LRESULT RadEdit::OnCharFromPos(HWND hWnd, POINT pos)
         return MAKELRESULT(TextLength(m_hText), nLine);
     const DWORD nLineEnd = TextLineEnd(m_hText, nLineIndex);
     const int nCount = nLineEnd - nLineIndex;
-    const int x = pos.x + MyGetScrollPos(hWnd, SB_HORZ) * AveCharWidth() - AveCharWidth() / 2 - MarginLeft();
+    const int x = pos.x + GetFirstVisibleCol(hWnd) * AveCharWidth() - AveCharWidth() / 2 - MarginLeft();
     const int nCol = x < 0 ? 0 : ::GetTabbedTextExtentEx(hDC, buffer + nLineIndex, nCount, m_nTabStops, m_rgTabStops, x);
     LocalUnlock(m_hText);
     SelectFont(hDC, of);
@@ -1134,13 +1165,14 @@ LRESULT RadEdit::OnCharFromPos(HWND hWnd, POINT pos)
     ((fn)(hWnd, (PCTSTR) lParam, (BOOL) wParam), 0L)
 #define HANDLE_EM_GETLINE(hWnd, wParam, lParam, fn) \
     (fn)(hWnd, (int) wParam, (PTCHAR) lParam, *(LPWORD) lParam)
-
 #define HANDLE_EM_LINEFROMCHAR(hWnd, wParam, lParam, fn) \
     (fn)(hWnd, (int) wParam)
 #define HANDLE_EM_SETTABSTOPS(hWnd, wParam, lParam, fn) \
     (fn)(hWnd, (LPINT) lParam, (int) wParam)
 #define HANDLE_EM_GETFIRSTVISIBLELINE(hWnd, wParam, lParam, fn) \
     (fn)(hWnd)
+#define HANDLE_EM_SETREADONLY(hWnd, wParam, lParam, fn) \
+    (fn)(hWnd, (BOOL) wParam)
 #define HANDLE_EM_GETWORDBREAKPROC(hWnd, wParam, lParam, fn) \
     (LRESULT)(fn)(hWnd)
 #define HANDLE_EM_SETWORDBREAKPROC(hWnd, wParam, lParam, fn) \
@@ -1185,6 +1217,7 @@ LRESULT RadEdit::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     HANDLE_MSG(hWnd, WM_PASTE,         OnPaste);
     HANDLE_MSG(hWnd, WM_CLEAR,         OnClear);
     HANDLE_MSG(hWnd, WM_SETREDRAW,     OnSetRedraw);
+    HANDLE_MSG(hWnd, WM_GETDLGCODE,    OnGetDlgCode);
 
     HANDLE_MSG(hWnd, EM_GETSEL,        OnGetSel);
     HANDLE_MSG(hWnd, EM_SETSEL,        OnSetSel);
@@ -1204,19 +1237,19 @@ LRESULT RadEdit::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     HANDLE_MSG(hWnd, EM_LINELENGTH,    OnLineLength);
     HANDLE_MSG(hWnd, EM_REPLACESEL,    OnReplaceSel);
     HANDLE_MSG(hWnd, EM_GETLINE,       OnGetLine);
-    // TODO HANDLE_MSG(hWnd, EM_LIMITTEXT, OnLimitText);  // Same as EM_SETLIMITTEXT
+    //HANDLE_MSG(hWnd, EM_LIMITTEXT, OnLimitText);  // Same as EM_SETLIMITTEXT
     // TODO HANDLE_MSG(hWnd, EM_CANUNDO, OnCanUndo);
     // TODO HANDLE_MSG(hWnd, EM_UNDO, OnUndo);
     // TODO HANDLE_MSG(hWnd, EM_FMTLINES, OnFmtLines);
     HANDLE_MSG(hWnd, EM_LINEFROMCHAR, OnLineFromChar);
     HANDLE_MSG(hWnd, EM_SETTABSTOPS, OnSetTabStops);
-    // TODO HANDLE_MSG(hWnd, EM_SETPASSWORDCHAR, OnSetPasswordChar);  // Ignore
+    //HANDLE_MSG(hWnd, EM_SETPASSWORDCHAR, OnSetPasswordChar);  // Ignore
     // TODO HANDLE_MSG(hWnd, EM_EMPTYUNDOBUFFER, OnEmptyUndoBuffer);
     HANDLE_MSG(hWnd, EM_GETFIRSTVISIBLELINE, OnGetFirstVisibleLine);
-    // TODO HANDLE_MSG(hWnd, EM_SETREADONLY, OnSetReadOnly);
+    HANDLE_MSG(hWnd, EM_SETREADONLY, OnSetReadOnly);
     HANDLE_MSG(hWnd, EM_GETWORDBREAKPROC, OnGetWordBreakProc);
     HANDLE_MSG(hWnd, EM_SETWORDBREAKPROC, OnSetWordBreakProc);
-    // TODO HANDLE_MSG(hWnd, EM_GETPASSWORDCHAR, OnGetPasswordChar);
+    //HANDLE_MSG(hWnd, EM_GETPASSWORDCHAR, OnGetPasswordChar);
     HANDLE_MSG(hWnd, EM_SETMARGINS, OnSetMargins);
     HANDLE_MSG(hWnd, EM_GETMARGINS, OnGetMargins);
     //HANDLE_MSG(hWnd, EM_SETLIMITTEXT, OnSetLimitText);  // Ignore
