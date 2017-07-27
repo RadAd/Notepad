@@ -13,10 +13,11 @@
 
 // NOTE Edit control doesn't handle UNIX line endings
 // NOTE Common control v6 always uses WCHAR in edit control
-
+// https://blogs.msdn.microsoft.com/oldnewthing/20031114-00/?p=41823
 #define MAX_LOADSTRING 128
 
 #define IDC_EDIT			1001
+
 #define IDC_STATUS			1002
 
 // Global Variables:
@@ -57,6 +58,7 @@ inline DWORD EditGetCursor(HWND hEdit)
     else
         Edit_SetSel(hEdit, nSelStart, nSelend);
     SetWindowRedraw(hEdit, TRUE);
+    // Win32 edit didn't need this, maybe radedit should capture WM_SETREDRAW
     RedrawWindow(hEdit, NULL, NULL, RDW_ERASE | RDW_FRAME | RDW_INVALIDATE | RDW_ALLCHILDREN);
     return nCursor;
 }

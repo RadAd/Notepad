@@ -5,12 +5,13 @@
 #include <intsafe.h>
 
 // TODO
-// WM_WANTKEYS
+// WM_WANTKEYS https://blogs.msdn.microsoft.com/oldnewthing/20031126-00/?p=41703
 // Check parent notifications EN_*
 // Support IME
 // Context menu
 // Support word wrap
 // readonly
+// ES_NOHIDESEL
 
 // NOT Implemented:
 // limit text
