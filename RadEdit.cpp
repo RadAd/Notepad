@@ -9,7 +9,6 @@
 // Support IME
 // Context menu
 // Support word wrap
-// ES_READONLY
 // ES_LEFT, ES_CENTER, ES_RIGHT
 // ES_UPPERCASE, ES_LOWERCASE
 // ES_AUTOVSCROLL, ES_AUTOVSCROLL not set
@@ -25,66 +24,75 @@
 // ES_PASSWORD
 // balloon tool tip
 
-LONG GetWidth(const RECT& r)
+namespace
 {
-    return r.right - r.left;
-}
-
-LONG GetHeight(const RECT& r)
-{
-    return r.bottom - r.top;
-}
-
-SIZE ToSize(DWORD s)
-{
-    return { LOWORD(s), HIWORD(s) };
-}
-
-POINT ToPoint(LPARAM p)
-{
-    return { GET_X_LPARAM(p), GET_Y_LPARAM(p) };
-}
-
-LRESULT ToLResult(POINT p)
-{
-    return MAKELPARAM(p.x, p.y);
-}
-
-int MyGetScrollPos(HWND hWnd, int nBar)
-{
-    SCROLLINFO info = { sizeof(SCROLLINFO), SIF_POS };
-    ENSURE(GetScrollInfo(hWnd, nBar, &info));
-    return info.nPos;
-}
-
-UINT MyGetScrollPage(HWND hWnd, int nBar)
-{
-    SCROLLINFO info = { sizeof(SCROLLINFO), SIF_PAGE };
-    ENSURE(GetScrollInfo(hWnd, nBar, &info));
-    return info.nPage;
-}
-
-int GetTabbedTextExtentEx(_In_ HDC hDC,
-    _In_reads_(chCount) LPCWSTR lpString,
-    _In_ int chCount,
-    _In_ int nTabPositions,
-    _In_reads_opt_(nTabPositions) INT *lpnTabStopPositions,
-    int x)
-{
-    // TODO Use a binary search method
-    for (int i = 0; i < chCount; ++i)
+    inline LONG GetWidth(const RECT& r)
     {
-        SIZE s = ToSize(GetTabbedTextExtent(hDC, lpString, i, nTabPositions, lpnTabStopPositions));
-        if (s.cx >= x)
-            return i;
+        return r.right - r.left;
     }
-    return chCount;
-}
 
-void NotifyParent(HWND hWnd, int code)
-{
-    //SendMessage(GetParent(hWnd), WM_COMMAND, MAKEWPARAM(GetDlgCtrlID(hWnd), code), (LPARAM) hWnd);
-    FORWARD_WM_COMMAND(GetParent(hWnd), GetWindowID(hWnd), hWnd, code, SNDMSG);
+    inline LONG GetHeight(const RECT& r)
+    {
+        return r.bottom - r.top;
+    }
+
+    inline SIZE ToSize(DWORD s)
+    {
+        return { LOWORD(s), HIWORD(s) };
+    }
+
+    inline POINT ToPoint(LPARAM p)
+    {
+        return { GET_X_LPARAM(p), GET_Y_LPARAM(p) };
+    }
+
+    inline LRESULT ToLResult(POINT p)
+    {
+        return MAKELPARAM(p.x, p.y);
+    }
+
+    BOOL HasStyle(HWND hWnd, int HasStyle)
+    {
+        int Style = GetWindowStyle(hWnd);
+        return (Style & HasStyle) == HasStyle;
+    }
+
+    int MyGetScrollPos(HWND hWnd, int nBar)
+    {
+        SCROLLINFO info = { sizeof(SCROLLINFO), SIF_POS };
+        ENSURE(GetScrollInfo(hWnd, nBar, &info));
+        return info.nPos;
+    }
+
+    UINT MyGetScrollPage(HWND hWnd, int nBar)
+    {
+        SCROLLINFO info = { sizeof(SCROLLINFO), SIF_PAGE };
+        ENSURE(GetScrollInfo(hWnd, nBar, &info));
+        return info.nPage;
+    }
+
+    int GetTabbedTextExtentEx(_In_ HDC hDC,
+        _In_reads_(chCount) LPCWSTR lpString,
+        _In_ int chCount,
+        _In_ int nTabPositions,
+        _In_reads_opt_(nTabPositions) INT *lpnTabStopPositions,
+        int x)
+    {
+        // TODO Use a binary search method
+        for (int i = 0; i < chCount; ++i)
+        {
+            SIZE s = ToSize(GetTabbedTextExtent(hDC, lpString, i, nTabPositions, lpnTabStopPositions));
+            if (s.cx >= x)
+                return i;
+        }
+        return chCount;
+    }
+
+    void NotifyParent(HWND hWnd, int code)
+    {
+        //SendMessage(GetParent(hWnd), WM_COMMAND, MAKEWPARAM(GetDlgCtrlID(hWnd), code), (LPARAM) hWnd);
+        FORWARD_WM_COMMAND(GetParent(hWnd), GetWindowID(hWnd), hWnd, code, SNDMSG);
+    }
 }
 
 LRESULT CALLBACK RadEditWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
@@ -299,21 +307,23 @@ void RadEdit::Draw(HWND hWnd, HDC hDC) const
 void RadEdit::ReplaceSel(HWND hWnd, PCWSTR pText, BOOL /*bStoreUndo*/)
 {
     // TODO bStoreUndo
-
-    DWORD nSelStart, nSelEnd;
-    OnGetSel(hWnd, &nSelStart, &nSelEnd);
-    if (nSelStart != nSelEnd || !IsEmpty(pText))
+    if (!HasStyle(hWnd, ES_READONLY))
     {
-        if (HLOCAL hTextNew = TextReplace(m_hText, nSelStart, nSelEnd, pText))
+        DWORD nSelStart, nSelEnd;
+        OnGetSel(hWnd, &nSelStart, &nSelEnd);
+        if (nSelStart != nSelEnd || !IsEmpty(pText))
         {
-            m_hText = hTextNew;
-            m_bModify = TRUE;
-            OnSetSel(hWnd, nSelEnd, nSelEnd);
-            InvalidateRect(hWnd, nullptr, TRUE);
-            NotifyParent(hWnd, EN_CHANGE);
+            if (HLOCAL hTextNew = TextReplace(m_hText, nSelStart, nSelEnd, pText))
+            {
+                m_hText = hTextNew;
+                m_bModify = TRUE;
+                OnSetSel(hWnd, nSelEnd, nSelEnd);
+                InvalidateRect(hWnd, nullptr, TRUE);
+                NotifyParent(hWnd, EN_CHANGE);
+            }
+            else
+                NotifyParent(hWnd, EN_ERRSPACE);
         }
-        else
-            NotifyParent(hWnd, EN_ERRSPACE);
     }
 }
 
@@ -960,7 +970,7 @@ void RadEdit::OnScrollCaret(HWND hWnd)
         hinfo.nPos = pos.x - hinfo.nPage;
 
     SetScrollInfo(hWnd, SB_VERT, &vinfo, TRUE);
-    SetScrollInfo(hWnd, SB_HORZ, &hinfo, TRUE);   // TODO
+    SetScrollInfo(hWnd, SB_HORZ, &hinfo, TRUE);
 
     MoveCaret(hWnd);
     InvalidateRect(hWnd, nullptr, TRUE);
