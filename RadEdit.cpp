@@ -11,8 +11,7 @@
 // Support word wrap
 // ES_LEFT, ES_CENTER, ES_RIGHT
 // ES_UPPERCASE, ES_LOWERCASE
-// ES_AUTOVSCROLL, ES_AUTOVSCROLL not set
-// ES_NOHIDESEL
+// ES_AUTOVSCROLL, ES_AUTOHSCROLL not set
 // ES_OEMCONVERT
 // ES_WANTRETURN
 // ES_NUMBER
@@ -259,8 +258,12 @@ void RadEdit::Draw(HWND hWnd, HDC hDC) const
 {
     HFONT of = SelectFont(hDC, m_hFont);
 
-    /*HBRUSH hBgBrush = */ FORWARD_WM_CTLCOLOREDIT(GetParent(hWnd), hDC, hWnd, SNDMSG);
-    //DeleteBrush(hBgBrush);
+    HBRUSH hBgBrush = HasStyle(hWnd, ES_READONLY)
+        ? FORWARD_WM_CTLCOLORSTATIC(GetParent(hWnd), hDC, hWnd, SNDMSG)
+        : FORWARD_WM_CTLCOLOREDIT(GetParent(hWnd), hDC, hWnd, SNDMSG);
+    DeleteBrush(hBgBrush);  // TODO Where to use brush
+
+    BOOL bShowSel = GetFocus() == hWnd || HasStyle(hWnd, ES_NOHIDESEL);
 
     // TODO Use margins here and in calcscrollbars
 
@@ -280,18 +283,21 @@ void RadEdit::Draw(HWND hWnd, HDC hDC) const
         const int nCount = nLineEnd - nIndex;
         TabbedTextOut(hDC, p.x, p.y, buffer + nIndex, nCount, m_nTabStops, m_rgTabStops, MarginLeft());
 
-        const DWORD nSelLineStart = min(max((int) nSelStart, nIndex), nIndex + nCount);
-        const DWORD nSelLineEnd = min(max((int) nSelEnd, nIndex), nIndex + nCount);
-        if (nSelLineStart != nSelLineEnd)
+        if (bShowSel)
         {
-            int save = SaveDC(hDC);
-            SIZE sBegin(CalcTextSize(hDC, buffer + nIndex, nSelLineStart - nIndex));
-            SIZE sEnd(CalcTextSize(hDC, buffer + nIndex, nSelLineEnd - nIndex));
-            IntersectClipRect(hDC, p.x + sBegin.cx, p.y, p.x + sEnd.cx, p.y + LineHeight());
-            SetBkColor(hDC, GetSysColor(COLOR_HIGHLIGHT));
-            SetTextColor(hDC, GetSysColor(COLOR_HIGHLIGHTTEXT));
-            TabbedTextOut(hDC, p.x, p.y, buffer + nIndex, nCount, m_nTabStops, m_rgTabStops, MarginLeft());
-            RestoreDC(hDC, save);
+            const DWORD nSelLineStart = min(max((int) nSelStart, nIndex), nIndex + nCount);
+            const DWORD nSelLineEnd = min(max((int) nSelEnd, nIndex), nIndex + nCount);
+            if (nSelLineStart != nSelLineEnd)
+            {
+                int save = SaveDC(hDC);
+                SIZE sBegin(CalcTextSize(hDC, buffer + nIndex, nSelLineStart - nIndex));
+                SIZE sEnd(CalcTextSize(hDC, buffer + nIndex, nSelLineEnd - nIndex));
+                IntersectClipRect(hDC, p.x + sBegin.cx, p.y, p.x + sEnd.cx, p.y + LineHeight());
+                SetBkColor(hDC, GetSysColor(COLOR_HIGHLIGHT));
+                SetTextColor(hDC, GetSysColor(COLOR_HIGHLIGHTTEXT));
+                TabbedTextOut(hDC, p.x, p.y, buffer + nIndex, nCount, m_nTabStops, m_rgTabStops, MarginLeft());
+                RestoreDC(hDC, save);
+            }
         }
 
         nIndex = GetNextLine(buffer, nLineEnd);
@@ -462,12 +468,14 @@ void RadEdit::OnSetFocus(HWND hWnd, HWND hWndOldFocus)
     CreateCaret(hWnd, NULL, 1, m_TextMetrics.tmHeight);
     MoveCaret(hWnd);
     ShowCaret(hWnd);
+    InvalidateRect(hWnd, NULL, TRUE);
     NotifyParent(hWnd, EN_SETFOCUS);
 }
 
 void RadEdit::OnKillFocus(HWND hWnd, HWND hWndNewFocus)
 {
     DestroyCaret();
+    InvalidateRect(hWnd, NULL, TRUE);
     NotifyParent(hWnd, EN_KILLFOCUS);
 }
 
