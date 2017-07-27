@@ -129,6 +129,7 @@ private:
     INT m_rgTabStops[256];
     DWORD m_nSelStart = 0;
     DWORD m_nSelEnd = 0;
+    BOOL m_bSelectWord = FALSE;
     EDITWORDBREAKPROC m_pEditWordBreakProc = nullptr;
 
     int LineHeight() const { return m_TextMetrics.tmHeight; }
@@ -757,26 +758,22 @@ void RadEdit::OnLButtonDown(HWND hWnd, BOOL fDoubleClick, int x, int y, UINT key
 {
    POINT point = { x, y };
 
+   DWORD nSelStart = m_nSelStart, nSelEnd = m_nSelEnd;
+   //OnGetSel(hWnd, &nSelStart, &nSelEnd);
+   nSelEnd = EditCharFromPos(hWnd, point);
+   m_bSelectWord = fDoubleClick;
    if (fDoubleClick)
    {
-        DWORD nSelStart = m_nSelStart, nSelEnd = m_nSelEnd;
-        //OnGetSel(hWnd, &nSelStart, &nSelEnd);
-        nSelEnd = EditCharFromPos(hWnd, point);
         EDITWORDBREAKPROC ewb = &DefaultEditWordBreakProc;
-        nSelStart = MoveWord(ewb, WB_LEFT, m_hText, nSelEnd);
-        nSelEnd = MoveWord(ewb, WB_RIGHT, m_hText, nSelEnd);
-        OnSetSel(hWnd, nSelStart, nSelEnd);
-   }
-   else
-   {
-        DWORD nSelStart = m_nSelStart, nSelEnd = m_nSelEnd;
-        //OnGetSel(hWnd, &nSelStart, &nSelEnd);
-        nSelEnd = EditCharFromPos(hWnd, point);
         if (!(keyFlags & MK_SHIFT))
-            nSelStart = nSelEnd;
-        OnSetSel(hWnd, nSelStart, nSelEnd);
-        SetCapture(hWnd);
+            nSelStart = MoveWord(ewb, WB_LEFT, m_hText, nSelEnd);
+        nSelEnd = MoveWord(ewb, WB_RIGHT, m_hText, nSelEnd);
+        m_bSelectWord = TRUE;
    }
+   if (!(keyFlags & MK_SHIFT))
+       nSelStart = nSelEnd;
+   OnSetSel(hWnd, nSelStart, nSelEnd);
+   SetCapture(hWnd);
 }
 
 void RadEdit::OnLButtonUp(HWND hWnd, int x, int y, UINT keyFlags)
@@ -790,10 +787,14 @@ void RadEdit::OnMouseMove(HWND hWnd, int x, int y, UINT keyFlags)
     POINT point = { x, y };
     if (GetCapture() == hWnd)
     {
-        // TODO Word select mode after a dbl click
         DWORD nSelStart = m_nSelStart, nSelEnd = m_nSelEnd;
         //OnGetSel(hWnd, &nSelStart, &nSelEnd);
         nSelEnd = EditCharFromPos(hWnd, point);
+        if (m_bSelectWord)
+        {
+            EDITWORDBREAKPROC ewb = &DefaultEditWordBreakProc;
+            nSelEnd = MoveWord(ewb, WB_RIGHT, m_hText, nSelEnd);
+        }
         OnSetSel(hWnd, nSelStart, nSelEnd);
         OnScrollCaret(hWnd);
     }
@@ -1149,8 +1150,6 @@ POINT RadEdit::OnPosFromChar(HWND hWnd, DWORD nChar)
 
 LRESULT RadEdit::OnCharFromPos(HWND hWnd, POINT pos)
 {
-    // TODO Take into account the margins
-
     const int nFirstLine = GetFirstVisibleLine(hWnd);
     const int nLine = nFirstLine + pos.y / LineHeight();
     if (nLine < 0)
