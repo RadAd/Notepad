@@ -9,10 +9,11 @@
 // Support IME
 // Context menu
 // Support word wrap
+// Support middle mouse click scroll mode
 // ES_LEFT, ES_CENTER, ES_RIGHT
 // ES_UPPERCASE, ES_LOWERCASE
 // ES_AUTOVSCROLL, ES_AUTOHSCROLL not set
-// ES_OEMCONVERT
+// ES_OEMCONVERT CharToOem
 // ES_WANTRETURN
 // ES_NUMBER
 
@@ -77,7 +78,7 @@ namespace
         _In_reads_opt_(nTabPositions) INT *lpnTabStopPositions,
         int x)
     {
-        // TODO Use a binary search method
+        // TODO Use a binary search method, need to be careful if in the middle of a character
         for (int i = 0; i < chCount; ++i)
         {
             SIZE s = ToSize(GetTabbedTextExtent(hDC, lpString, i, nTabPositions, lpnTabStopPositions));
@@ -136,7 +137,7 @@ private:
     void CalcScrollBars(HWND hWnd) const;
     SIZE CalcTextSize(HDC hDC, PCWSTR buffer, int nCount) const;
     void MoveCaret(HWND hWnd) const;
-    void Draw(HWND hWnd, HDC hDC) const;
+    void Draw(HWND hWnd, HDC hDC, LPCRECT pr) const;
     void ReplaceSel(HWND hWnd, PCWSTR pText, BOOL bStoreUndo);
     DWORD GetFirstVisibleLine(HWND hWnd) const;
     DWORD GetFirstVisibleCol(HWND hWnd) const;
@@ -227,6 +228,8 @@ void RadEdit::CalcScrollBars(HWND hWnd) const
 
     RECT cr = {};
     GetClientRect(hWnd, &cr);
+    cr.left += MarginLeft();
+    cr.right -= MarginRight();
 
     SCROLLINFO vinfo = { sizeof(SCROLLINFO), SIF_ALL }, hinfo = { sizeof(SCROLLINFO), SIF_ALL };
     ENSURE(GetScrollInfo(hWnd, SB_VERT, &vinfo));
@@ -254,21 +257,17 @@ void RadEdit::MoveCaret(HWND hWnd) const
     SetCaretPos(p.x, p.y);
 }
 
-void RadEdit::Draw(HWND hWnd, HDC hDC) const
+void RadEdit::Draw(HWND hWnd, HDC hDC, LPCRECT pr) const
 {
     HFONT of = SelectFont(hDC, m_hFont);
 
-    HBRUSH hBgBrush = HasStyle(hWnd, ES_READONLY)
-        ? FORWARD_WM_CTLCOLORSTATIC(GetParent(hWnd), hDC, hWnd, SNDMSG)
-        : FORWARD_WM_CTLCOLOREDIT(GetParent(hWnd), hDC, hWnd, SNDMSG);
-    DeleteBrush(hBgBrush);  // TODO Where to use brush
-
     BOOL bShowSel = GetFocus() == hWnd || HasStyle(hWnd, ES_NOHIDESEL);
 
-    // TODO Use margins here and in calcscrollbars
-
-    RECT cr = {};
-    GetClientRect(hWnd, &cr);
+    RECT rClip;
+    GetClientRect(hWnd, &rClip);
+    rClip.left += MarginLeft();
+    rClip.right -= MarginRight();
+    IntersectClipRect(hDC, rClip.left, rClip.top, rClip.right, rClip.bottom);
 
     DWORD nSelStart, nSelEnd;
     OnGetSel(hWnd, &nSelStart, &nSelEnd);
@@ -276,7 +275,9 @@ void RadEdit::Draw(HWND hWnd, HDC hDC) const
     POINT p = { -(int) GetFirstVisibleCol(hWnd) * AveCharWidth() + MarginLeft(), 0 };
     PCWSTR const buffer = (PCWSTR) LocalLock(m_hText);
     const int nFirstLine = GetFirstVisibleLine(hWnd);
-    int nIndex = TextLineIndex(m_hText, nFirstLine);
+    const int nStartLine = pr->top / LineHeight();
+    p.y += nStartLine * LineHeight();
+    int nIndex = TextLineIndex(m_hText, nFirstLine + nStartLine);
     while (nIndex >= 0)
     {
         const int nLineEnd = GetLineEnd(buffer, nIndex);
@@ -302,7 +303,7 @@ void RadEdit::Draw(HWND hWnd, HDC hDC) const
 
         nIndex = GetNextLine(buffer, nLineEnd);
         p.y += LineHeight();
-        if ((p.y + m_TextMetrics.tmHeight) > cr.bottom)
+        if ((p.y + m_TextMetrics.tmHeight) > pr->bottom)
             break;
     }
     LocalUnlock(m_hText);
@@ -428,8 +429,13 @@ void RadEdit::OnPaint(HWND hWnd)
     HBITMAP hBmp = CreateCompatibleBitmap(hDC, GetWidth(cr), GetHeight(cr));
     HBITMAP hOldBmp = SelectBitmap(hBmpDC, hBmp);
 
+    HBRUSH hBgBrush = HasStyle(hWnd, ES_READONLY)
+        ? FORWARD_WM_CTLCOLORSTATIC(GetParent(hWnd), hDC, hWnd, SNDMSG)
+        : FORWARD_WM_CTLCOLOREDIT(GetParent(hWnd), hDC, hWnd, SNDMSG);
+    DeleteBrush(hBgBrush);  // TODO Where to use brush
+
     DefWindowProc(hWnd, WM_ERASEBKGND, (WPARAM) hBmpDC, 0);
-    Draw(hWnd, hBmpDC);
+    Draw(hWnd, hBmpDC, &ps.rcPaint);
     BitBlt(hDC, 0, 0, GetWidth(cr), GetHeight(cr), hBmpDC, 0, 0, SRCCOPY);
 
     SelectBitmap(hBmpDC, hOldBmp);
