@@ -252,7 +252,7 @@ int TextLineIndex(HLOCAL hText, int nLine)
 HLOCAL TextReplace(HLOCAL hText, const int nStart, DWORD& nEnd, PCWSTR const pText)
 {
     ASSERT(hText != NULL);
-    ASSERT(nStart <= nEnd);
+    ASSERT(nStart <= (int) nEnd);
     ASSERT(pText != nullptr);
 
     const int nTextLen = (int) wcslen(pText);
@@ -260,7 +260,7 @@ HLOCAL TextReplace(HLOCAL hText, const int nStart, DWORD& nEnd, PCWSTR const pTe
     const int nLen = TextLength(hText) + 1;
 
     ASSERT(nStart >= 0 && nStart <= nLen);
-    ASSERT(nEnd >= 0 && nEnd <= nLen);
+    ASSERT(nEnd >= 0 && (int) nEnd <= nLen);
 
     HLOCAL hTextNew = LocalReAlloc(hText, (nLen + nDiff) * sizeof(WCHAR), LMEM_MOVEABLE);
     if (hTextNew == NULL)

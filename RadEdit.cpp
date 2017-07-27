@@ -5,6 +5,7 @@
 #include <intsafe.h>
 
 // TODO
+// Undo
 // Check parent notifications EN_*
 // Support IME
 // Context menu
@@ -20,6 +21,7 @@
 // NOT Implemented:
 // limit text
 // single line
+// word wrap
 // cue banner
 // ES_PASSWORD
 // balloon tool tip
@@ -148,9 +150,9 @@ public:
     BOOL OnEraseBkgnd(HWND hWnd, HDC hdc);
     void OnPaint(HWND hWnd);
     void OnSize(HWND hWnd, UINT state, int cx, int cy);
-    void OnScroll(HWND hWnd, UINT nSBCode, UINT /*nPos*/, HWND hScrollBar, UINT nBar) const;
-    void OnVScroll(HWND hWnd, HWND hWndCtl, UINT code, int pos) { OnScroll(hWnd, code, pos, hWndCtl, SB_VERT); NotifyParent(hWnd, EN_VSCROLL); }
-    void OnHScroll(HWND hWnd, HWND hWndCtl, UINT code, int pos) { OnScroll(hWnd, code, pos, hWndCtl, SB_HORZ); NotifyParent(hWnd, EN_HSCROLL); }
+    void OnScroll(HWND hWnd, UINT nSBCode, HWND hScrollBar, UINT nBar) const;
+    void OnVScroll(HWND hWnd, HWND hWndCtl, UINT code, int /*pos*/) { OnScroll(hWnd, code, hWndCtl, SB_VERT); NotifyParent(hWnd, EN_VSCROLL); }
+    void OnHScroll(HWND hWnd, HWND hWndCtl, UINT code, int /*pos*/) { OnScroll(hWnd, code, hWndCtl, SB_HORZ); NotifyParent(hWnd, EN_HSCROLL); }
     void OnSetFocus(HWND hWnd, HWND hWndOldFocus);
     void OnKillFocus(HWND hWnd, HWND hWndNewFocus);
     void OnSetFont(HWND hWnd, HFONT hFont, BOOL bRedraw);
@@ -163,7 +165,7 @@ public:
     void OnMouseWheel(HWND hWnd, int xPos, int yPos, int zDelta, UINT fwKeys);
     INT OnGetTextLength(HWND hWnd);
     INT OnGetText(HWND hWnd, int cchTextMax, LPTSTR lpszText);
-    void OnSetText(HWND hWnd, LPCTSTR lpszText);
+    BOOL OnSetText(HWND hWnd, LPCTSTR lpszText);
     void OnCut(HWND hWnd);
     void OnCopy(HWND hWnd);
     void OnPaste(HWND hWnd);
@@ -374,12 +376,14 @@ UINT DoScroll(UINT nSBCode, const SCROLLINFO& info)
 
     case SB_PAGELEFT:    // Scroll one page left.
         if (curpos > info.nMin)
-            curpos = max(info.nMin, curpos - MulDiv(info.nPage, 9, 10));
+            //curpos = max(info.nMin, curpos - MulDiv(info.nPage, 9, 10));
+            curpos = max(info.nMin, curpos - info.nPage);
         break;
 
     case SB_PAGERIGHT:      // Scroll one page right.
         if (curpos < info.nMax)
-            curpos = min(info.nMax, curpos + MulDiv(info.nPage, 9, 10));
+            //curpos = min(info.nMax, curpos + MulDiv(info.nPage, 9, 10));
+            curpos = min(info.nMax, curpos + info.nPage);
         break;
 
     case SB_THUMBPOSITION:          // Scroll to absolute position. nTrackPos is the position
@@ -451,7 +455,7 @@ void RadEdit::OnSize(HWND hWnd, UINT state, int cx, int cy)
    CalcScrollBars(hWnd);
 }
 
-void RadEdit::OnScroll(HWND hWnd, UINT nSBCode, UINT /*nPos*/, HWND hScrollBar, UINT nBar) const
+void RadEdit::OnScroll(HWND hWnd, UINT nSBCode, HWND hScrollBar, UINT nBar) const
 {
     if (hScrollBar == NULL)
         hScrollBar = hWnd;
@@ -569,7 +573,7 @@ void RadEdit::OnKey(HWND hWnd, UINT vk, BOOL fDown, int cRepeat, UINT flags)
         break;
 
     case VK_UP:
-        if (!bAlt)
+        if (!bAlt && !bCtrl)
         {
             int nSelStart = m_nSelStart, nSelEnd = m_nSelEnd;
             POINT pos(EditPosFromChar(hWnd, nSelEnd));
@@ -583,7 +587,7 @@ void RadEdit::OnKey(HWND hWnd, UINT vk, BOOL fDown, int cRepeat, UINT flags)
         break;
 
     case VK_DOWN:
-        if (!bAlt)
+        if (!bAlt && !bCtrl)
         {
             int nSelStart = m_nSelStart, nSelEnd = m_nSelEnd;
             POINT pos(EditPosFromChar(hWnd, nSelEnd));
@@ -635,12 +639,11 @@ void RadEdit::OnKey(HWND hWnd, UINT vk, BOOL fDown, int cRepeat, UINT flags)
     case VK_NEXT:
         if (!bAlt)
         {
-            // TODO Scroll up a page, keep caret on relative line
-            UINT nPage = MyGetScrollPage(hWnd, SB_VERT);
-
             int nSelStart = m_nSelStart, nSelEnd = m_nSelEnd;
             POINT pos(EditPosFromChar(hWnd, nSelEnd));
-            pos.y += LineHeight() * MulDiv(nPage, 9, 10);
+
+            OnScroll(hWnd, SB_PAGEDOWN, NULL, SB_VERT);
+
             nSelEnd = EditCharFromPos(hWnd, pos);
             if (!bShift)
                 nSelStart = nSelEnd;
@@ -652,12 +655,11 @@ void RadEdit::OnKey(HWND hWnd, UINT vk, BOOL fDown, int cRepeat, UINT flags)
     case VK_PRIOR:
         if (!bAlt)
         {
-            // TODO Scroll up a page, keep caret on relative line
-            UINT nPage = MyGetScrollPage(hWnd, SB_VERT);
-
             int nSelStart = m_nSelStart, nSelEnd = m_nSelEnd;
             POINT pos(EditPosFromChar(hWnd, nSelEnd));
-            pos.y -= LineHeight() * MulDiv(nPage, 9, 10);
+
+            OnScroll(hWnd, SB_PAGEUP, NULL, SB_VERT);
+
             nSelEnd = EditCharFromPos(hWnd, pos);
             if (!bShift)
                 nSelStart = nSelEnd;
@@ -789,7 +791,6 @@ void RadEdit::OnMouseMove(HWND hWnd, int x, int y, UINT keyFlags)
     if (GetCapture() == hWnd)
     {
         // TODO Word select mode after a dbl click
-        // TODO Scroll window
         DWORD nSelStart = m_nSelStart, nSelEnd = m_nSelEnd;
         //OnGetSel(hWnd, &nSelStart, &nSelEnd);
         nSelEnd = EditCharFromPos(hWnd, point);
@@ -821,17 +822,17 @@ INT RadEdit::OnGetText(HWND hWnd, int cchTextMax, LPTSTR lpszText)
     return (INT) wcslen(lpszText);    // TODO capture size when copying
 }
 
-void RadEdit::OnSetText(HWND hWnd, LPCTSTR lpszText)
+BOOL RadEdit::OnSetText(HWND hWnd, LPCTSTR lpszText)
 {
     HLOCAL hTextNew = TextCreate(lpszText);
     if (hTextNew != NULL)
     {
         LocalFree(m_hText);
         m_hText = hTextNew;
-        return; // TODO TRUE;
+        return TRUE;
     }
     else
-        return; // TODO FALSE;
+        return FALSE;
 }
 
 void RadEdit::OnCut(HWND hWnd)
@@ -889,8 +890,8 @@ void RadEdit::OnSetRedraw(HWND hWnd, BOOL fRedraw)
     // TODO Capture rcPaint during WM_PAINT to reapply here
     FORWARD_WM_SETREDRAW(hWnd, fRedraw, DefWindowProc);
     if (fRedraw)
-        //RedrawWindow(hWnd, NULL, NULL, RDW_ERASE | RDW_FRAME | RDW_INVALIDATE | RDW_ALLCHILDREN);
-        InvalidateRect(hWnd, NULL, TRUE);
+        RedrawWindow(hWnd, NULL, NULL, RDW_ERASE | RDW_FRAME | RDW_INVALIDATE | RDW_ALLCHILDREN);
+        //InvalidateRect(hWnd, NULL, TRUE);
 }
 
 UINT RadEdit::OnGetDlgCode(HWND hWnd, LPMSG pMsg)
@@ -918,23 +919,22 @@ void RadEdit::OnSetSel(HWND hWnd, DWORD nSelStart, DWORD nSelEnd)
 {
     if (nSelStart == -1)
     {
-        m_nSelStart = m_nSelEnd;
+        nSelStart = nSelEnd = m_nSelEnd;
     }
-    else
+    else if (nSelEnd == -1)
+        nSelEnd = TextLength(m_hText);
+    if (m_nSelStart != nSelStart || m_nSelEnd != nSelEnd)
     {
         m_nSelStart = nSelStart;
         m_nSelEnd = nSelEnd;
-        if (m_nSelEnd == -1)
-            m_nSelEnd = TextLength(m_hText);
+        MoveCaret(hWnd);
+        InvalidateRect(hWnd, nullptr, TRUE);
     }
-    // TODO Detect if changed
-    MoveCaret(hWnd);
-    InvalidateRect(hWnd, nullptr, TRUE);
 }
 
 LRESULT RadEdit::OnScroll(HWND hWnd, UINT nSBCode)
 {
-    OnScroll(hWnd, nSBCode, 0, NULL, SB_VERT);
+    OnScroll(hWnd, nSBCode, NULL, SB_VERT);
     // TODO Fix return
     return 0;
 }
@@ -1173,6 +1173,10 @@ LRESULT RadEdit::OnCharFromPos(HWND hWnd, POINT pos)
     return MAKELRESULT(nLineIndex + nCol, nLine);
 }
 
+#undef HANDLE_WM_SETTEXT // Need return value
+#define HANDLE_WM_SETTEXT(hwnd, wParam, lParam, fn) \
+    (fn)((hwnd), (LPCTSTR)(lParam))
+
 #define HANDLE_EM_GETSEL(hWnd, wParam, lParam, fn) \
     (LRESULT)(fn)(hWnd, (LPDWORD) wParam, (LPDWORD) lParam)
 #define HANDLE_EM_SETSEL(hWnd, wParam, lParam, fn) \
@@ -1259,9 +1263,9 @@ LRESULT RadEdit::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
     HANDLE_MSG(hWnd, EM_GETSEL,        OnGetSel);
     HANDLE_MSG(hWnd, EM_SETSEL,        OnSetSel);
-    // TODO HANDLE_MSG(hWnd, EM_GETRECT, OnGetRect);
-    // TODO HANDLE_MSG(hWnd, EM_SETRECT, OnSetRect);
-    // TODO HANDLE_MSG(hWnd, EM_SETRECTNP, OnSetRectNP);
+    // HANDLE_MSG(hWnd, EM_GETRECT, OnGetRect);
+    // HANDLE_MSG(hWnd, EM_SETRECT, OnSetRect);
+    // HANDLE_MSG(hWnd, EM_SETRECTNP, OnSetRectNP);
     HANDLE_MSG(hWnd, EM_SCROLL,        OnScroll);
     HANDLE_MSG(hWnd, EM_LINESCROLL,    OnLineScroll);
     HANDLE_MSG(hWnd, EM_SCROLLCARET,   OnScrollCaret);
@@ -1278,7 +1282,7 @@ LRESULT RadEdit::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     //HANDLE_MSG(hWnd, EM_LIMITTEXT, OnLimitText);  // Same as EM_SETLIMITTEXT
     // TODO HANDLE_MSG(hWnd, EM_CANUNDO, OnCanUndo);
     // TODO HANDLE_MSG(hWnd, EM_UNDO, OnUndo);
-    // TODO HANDLE_MSG(hWnd, EM_FMTLINES, OnFmtLines);
+    // HANDLE_MSG(hWnd, EM_FMTLINES, OnFmtLines);
     HANDLE_MSG(hWnd, EM_LINEFROMCHAR, OnLineFromChar);
     HANDLE_MSG(hWnd, EM_SETTABSTOPS, OnSetTabStops);
     //HANDLE_MSG(hWnd, EM_SETPASSWORDCHAR, OnSetPasswordChar);  // Ignore
