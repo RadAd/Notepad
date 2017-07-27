@@ -3,12 +3,12 @@
 #include "Text.h"
 #include <windowsx.h>
 #include <intsafe.h>
+#include "resource.h"   // For IDR_RADEDIT
 
 // TODO
 // Undo
 // Check parent notifications EN_*
 // Support IME
-// Context menu
 // Support word wrap
 // Support middle mouse click scroll mode
 // ES_LEFT, ES_CENTER, ES_RIGHT
@@ -164,6 +164,7 @@ public:
     void OnLButtonUp(HWND hWnd, int x, int y, UINT keyFlags);
     void OnMouseMove(HWND hWnd, int x, int y, UINT keyFlags);
     void OnMouseWheel(HWND hWnd, int xPos, int yPos, int zDelta, UINT fwKeys);
+    void OnContextMenu(HWND hwnd, HWND hwndContext, UINT xPos, UINT yPos);
     INT OnGetTextLength(HWND hWnd);
     INT OnGetText(HWND hWnd, int cchTextMax, LPTSTR lpszText);
     BOOL OnSetText(HWND hWnd, LPCTSTR lpszText);
@@ -770,7 +771,7 @@ void RadEdit::OnLButtonDown(HWND hWnd, BOOL fDoubleClick, int x, int y, UINT key
         nSelEnd = MoveWord(ewb, WB_RIGHT, m_hText, nSelEnd);
         m_bSelectWord = TRUE;
    }
-   if (!(keyFlags & MK_SHIFT))
+   else if (!(keyFlags & MK_SHIFT))
        nSelStart = nSelEnd;
    OnSetSel(hWnd, nSelStart, nSelEnd);
    SetCapture(hWnd);
@@ -807,6 +808,22 @@ void RadEdit::OnMouseWheel(HWND hWnd, int xPos, int yPos, int zDelta, UINT fwKey
         int nLines = MulDiv(zDelta, -3, WHEEL_DELTA);
         Edit_Scroll(hWnd, nLines, 0);
     }
+}
+
+void RadEdit::OnContextMenu(HWND hWnd, HWND hWndContext, UINT xPos, UINT yPos)
+{
+    HMODULE hInst = GetWindowInstance(hWnd);
+    HMENU hMenu = LoadMenu(hInst, MAKEINTRESOURCE(IDR_RADEDIT));
+    DWORD nSelStart = m_nSelStart, nSelEnd = m_nSelEnd;
+    //OnGetSel(hWnd, &nSelStart, &nSelEnd);
+    BOOL bSelected = nSelStart != nSelEnd;
+    EnableMenuItem(hMenu, WM_CUT, MF_BYCOMMAND | (bSelected ? MF_ENABLED : MF_DISABLED));
+    EnableMenuItem(hMenu, WM_COPY, MF_BYCOMMAND | (bSelected ? MF_ENABLED : MF_DISABLED));
+    EnableMenuItem(hMenu, WM_CLEAR, MF_BYCOMMAND | (bSelected ? MF_ENABLED : MF_DISABLED));
+    int cmd = TrackPopupMenu(GetSubMenu(hMenu, 0), TPM_RETURNCMD | TPM_RIGHTBUTTON, xPos, yPos, 0, hWnd, nullptr);
+    if (cmd > 0)
+        SendMessage(hWnd, cmd, 0, -1);
+    DestroyMenu(hMenu);
 }
 
 INT RadEdit::OnGetTextLength(HWND hWnd)
@@ -1250,6 +1267,7 @@ LRESULT RadEdit::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     HANDLE_MSG(hWnd, WM_LBUTTONUP,     OnLButtonUp);
     HANDLE_MSG(hWnd, WM_MOUSEMOVE,     OnMouseMove);
     HANDLE_MSG(hWnd, WM_MOUSEWHEEL,    OnMouseWheel);
+    HANDLE_MSG(hWnd, WM_CONTEXTMENU,   OnContextMenu);
     HANDLE_MSG(hWnd, WM_GETTEXTLENGTH, OnGetTextLength);
     HANDLE_MSG(hWnd, WM_GETTEXT,       OnGetText);
     HANDLE_MSG(hWnd, WM_SETTEXT,       OnSetText);
