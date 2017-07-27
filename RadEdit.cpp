@@ -45,6 +45,11 @@ POINT ToPoint(LPARAM p)
     return { GET_X_LPARAM(p), GET_Y_LPARAM(p) };
 }
 
+LRESULT ToLResult(POINT p)
+{
+    return MAKELPARAM(p.x, p.y);
+}
+
 int MyGetScrollPos(HWND hWnd, int nBar)
 {
     SCROLLINFO info = { sizeof(SCROLLINFO), SIF_POS };
@@ -181,7 +186,7 @@ public:
     void OnSetWordBreakProc(HWND hWnd, EDITWORDBREAKPROC pEWP);
     void OnSetMargins(HWND hWnd, UINT nFlags, UINT nLeftMargin, UINT nRightMargin);
     LRESULT OnGetMargins(HWND hWnd);
-    LRESULT OnPosFromChar(HWND hWnd, DWORD nChar);
+    POINT OnPosFromChar(HWND hWnd, DWORD nChar);
     LRESULT OnCharFromPos(HWND hWnd, POINT pos);
 
     LRESULT WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
@@ -303,7 +308,7 @@ void RadEdit::ReplaceSel(HWND hWnd, PCWSTR pText, BOOL /*bStoreUndo*/)
         {
             m_hText = hTextNew;
             m_bModify = TRUE;
-            Edit_SetSel(hWnd, nSelEnd, nSelEnd);
+            OnSetSel(hWnd, nSelEnd, nSelEnd);
             InvalidateRect(hWnd, nullptr, TRUE);
             NotifyParent(hWnd, EN_CHANGE);
         }
@@ -513,8 +518,8 @@ void RadEdit::OnKey(HWND hWnd, UINT vk, BOOL fDown, int cRepeat, UINT flags)
             {
                 if (!bShift)
                     nSelStart = nSelEnd;
-                Edit_SetSel(hWnd, nSelStart, nSelEnd);
-                Edit_ScrollCaret(hWnd);
+                OnSetSel(hWnd, nSelStart, nSelEnd);
+                OnScrollCaret(hWnd);
             }
         }
         break;
@@ -533,8 +538,8 @@ void RadEdit::OnKey(HWND hWnd, UINT vk, BOOL fDown, int cRepeat, UINT flags)
             {
                 if (!bShift)
                     nSelStart = nSelEnd;
-                Edit_SetSel(hWnd, nSelStart, nSelEnd);
-                Edit_ScrollCaret(hWnd);
+                OnSetSel(hWnd, nSelStart, nSelEnd);
+                OnScrollCaret(hWnd);
             }
         }
         break;
@@ -548,8 +553,8 @@ void RadEdit::OnKey(HWND hWnd, UINT vk, BOOL fDown, int cRepeat, UINT flags)
             nSelEnd = EditCharFromPos(hWnd, pos);
             if (!bShift)
                 nSelStart = nSelEnd;
-            Edit_SetSel(hWnd, nSelStart, nSelEnd);
-            Edit_ScrollCaret(hWnd);
+            OnSetSel(hWnd, nSelStart, nSelEnd);
+            OnScrollCaret(hWnd);
         }
         break;
 
@@ -562,8 +567,8 @@ void RadEdit::OnKey(HWND hWnd, UINT vk, BOOL fDown, int cRepeat, UINT flags)
             nSelEnd = EditCharFromPos(hWnd, pos);
             if (!bShift)
                 nSelStart = nSelEnd;
-            Edit_SetSel(hWnd, nSelStart, nSelEnd);
-            Edit_ScrollCaret(hWnd);
+            OnSetSel(hWnd, nSelStart, nSelEnd);
+            OnScrollCaret(hWnd);
         }
         break;
 
@@ -579,8 +584,8 @@ void RadEdit::OnKey(HWND hWnd, UINT vk, BOOL fDown, int cRepeat, UINT flags)
             {
                 if (!bShift)
                     nSelStart = nSelEnd;
-                Edit_SetSel(hWnd, nSelStart, nSelEnd);
-                Edit_ScrollCaret(hWnd);
+                OnSetSel(hWnd, nSelStart, nSelEnd);
+                OnScrollCaret(hWnd);
             }
         }
         break;
@@ -597,8 +602,8 @@ void RadEdit::OnKey(HWND hWnd, UINT vk, BOOL fDown, int cRepeat, UINT flags)
             {
                 if (!bShift)
                     nSelStart = nSelEnd;
-                Edit_SetSel(hWnd, nSelStart, nSelEnd);
-                Edit_ScrollCaret(hWnd);
+                OnSetSel(hWnd, nSelStart, nSelEnd);
+                OnScrollCaret(hWnd);
             }
         }
         break;
@@ -615,8 +620,8 @@ void RadEdit::OnKey(HWND hWnd, UINT vk, BOOL fDown, int cRepeat, UINT flags)
             nSelEnd = EditCharFromPos(hWnd, pos);
             if (!bShift)
                 nSelStart = nSelEnd;
-            Edit_SetSel(hWnd, nSelStart, nSelEnd);
-            Edit_ScrollCaret(hWnd);
+            OnSetSel(hWnd, nSelStart, nSelEnd);
+            OnScrollCaret(hWnd);
         }
         break;
 
@@ -632,8 +637,8 @@ void RadEdit::OnKey(HWND hWnd, UINT vk, BOOL fDown, int cRepeat, UINT flags)
             nSelEnd = EditCharFromPos(hWnd, pos);
             if (!bShift)
                 nSelStart = nSelEnd;
-            Edit_SetSel(hWnd, nSelStart, nSelEnd);
-            Edit_ScrollCaret(hWnd);
+            OnSetSel(hWnd, nSelStart, nSelEnd);
+            OnScrollCaret(hWnd);
         }
         break;
 
@@ -765,6 +770,7 @@ void RadEdit::OnMouseMove(HWND hWnd, int x, int y, UINT keyFlags)
         //OnGetSel(hWnd, &nSelStart, &nSelEnd);
         nSelEnd = EditCharFromPos(hWnd, point);
         OnSetSel(hWnd, nSelStart, nSelEnd);
+        OnScrollCaret(hWnd);
     }
 }
 
@@ -932,6 +938,11 @@ LRESULT RadEdit::OnLineScroll(HWND hWnd, int nHScroll, int nVScroll)
 void RadEdit::OnScrollCaret(HWND hWnd)
 {
     const int nLine = TextLineFromChar(m_hText, m_nSelEnd);
+    // TODO Maybe calculate this better
+    POINT pos = OnPosFromChar(hWnd, m_nSelEnd);
+    pos.x -= MarginLeft();
+    pos.x /= AveCharWidth();
+    pos.x += GetFirstVisibleCol(hWnd);
 
     SCROLLINFO vinfo = { sizeof(SCROLLINFO), SIF_POS | SIF_PAGE }, hinfo = { sizeof(SCROLLINFO), SIF_POS | SIF_PAGE };
     ENSURE(GetScrollInfo(hWnd, SB_VERT, &vinfo));
@@ -943,8 +954,13 @@ void RadEdit::OnScrollCaret(HWND hWnd)
     else if ((vinfo.nPos + (int) vinfo.nPage) < nLine)
         vinfo.nPos = nLine - vinfo.nPage;
 
+    if (hinfo.nPos > pos.x)
+        hinfo.nPos = pos.x;
+    else if ((hinfo.nPos + (int) hinfo.nPage) < pos.x)
+        hinfo.nPos = pos.x - hinfo.nPage;
+
     SetScrollInfo(hWnd, SB_VERT, &vinfo, TRUE);
-    //SetScrollInfo(hWnd, SB_HORZ, &hinfo, TRUE);   // TODO
+    SetScrollInfo(hWnd, SB_HORZ, &hinfo, TRUE);   // TODO
 
     MoveCaret(hWnd);
     InvalidateRect(hWnd, nullptr, TRUE);
@@ -981,8 +997,8 @@ void RadEdit::OnSetHandle(HWND hWnd, HLOCAL hText)
     CalcScrollBars(hWnd);
     SetScrollPos(hWnd, SB_VERT, 0, TRUE);
     SetScrollPos(hWnd, SB_HORZ, 0, TRUE);
-    Edit_SetSel(0, 0, TRUE);
-    //Edit_ScrollCaret(hWnd);
+    OnSetSel(hWnd, 0, 0);
+    //OnScrollCaret(hWnd);
 }
 
 HLOCAL RadEdit::OnGetHandle(HWND hWnd)
@@ -1085,10 +1101,8 @@ LRESULT RadEdit::OnGetMargins(HWND hWnd)
     return MAKELRESULT(m_nMarginLeft, m_nMarginRight);
 }
 
-LRESULT RadEdit::OnPosFromChar(HWND hWnd, DWORD nChar)
+POINT RadEdit::OnPosFromChar(HWND hWnd, DWORD nChar)
 {
-    // TODO Take into account the margins
-
     const int nLine = TextLineFromChar(m_hText, nChar);
     const DWORD nLineIndex = TextLineStart(m_hText, nChar);
 
@@ -1106,7 +1120,7 @@ LRESULT RadEdit::OnPosFromChar(HWND hWnd, DWORD nChar)
 
     const int nFirstLine = GetFirstVisibleLine(hWnd);
     POINT p = { sPos.cx - (int) GetFirstVisibleCol(hWnd) * AveCharWidth() + MarginLeft(), (nLine - nFirstLine) * LineHeight() };
-    return MAKELRESULT(p.x, p.y);
+    return p;
 }
 
 LRESULT RadEdit::OnCharFromPos(HWND hWnd, POINT pos)
@@ -1182,7 +1196,7 @@ LRESULT RadEdit::OnCharFromPos(HWND hWnd, POINT pos)
 #define HANDLE_EM_GETMARGINS(hWnd, wParam, lParam, fn) \
     (fn)(hWnd)
 #define HANDLE_EM_POSFROMCHAR(hWnd, wParam, lParam, fn) \
-    (fn)(hWnd, (DWORD) wParam)
+    ToLResult((fn)(hWnd, (DWORD) wParam))
 #define HANDLE_EM_CHARFROMPOS(hWnd, wParam, lParam, fn) \
     (fn)(hWnd, ToPoint(lParam))
 
