@@ -1,7 +1,6 @@
 #pragma once
 
 // TODO Consistently use DWORD for char pos
-// TODO Support unicode use CharPrev/CharNext or IsDBCSLeadByte
 
 int TextLength(HLOCAL hText);
 
@@ -42,7 +41,7 @@ int GetNextChar(PCWSTR buffer, int nIndex)
     else if (NewLineNextLength(buffer, nIndex) > 0)
         return nIndex + NewLineNextLength(buffer, nIndex);
     else
-        return nIndex + 1;
+        return (int) (CharNext(buffer + nIndex) - buffer);
 }
 
 int GetNextChar(HLOCAL hText, int nIndex)
@@ -60,7 +59,7 @@ int GetPrevChar(PCWSTR buffer, int nIndex)
     else if (NewLinePrevLength(buffer, nIndex) > 0)
         return nIndex - NewLinePrevLength(buffer, nIndex);
     else
-        return nIndex - 1;
+        return (int) (CharPrev(buffer, buffer + nIndex) - buffer);
 }
 
 int GetPrevChar(HLOCAL hText, int nIndex)
@@ -96,7 +95,7 @@ int CALLBACK DefaultEditWordBreakProc(LPWSTR lpch, int ichCurrent, int cch, int 
         else //if (!iswblank(lpch[ichCurrent - 1]))
         {
             while (ichCurrent > 0 && !iswspace(lpch[ichCurrent - 1]))
-                --ichCurrent;
+                ichCurrent = (int) (CharPrev(lpch, lpch + ichCurrent) - lpch);
         }
         return ichCurrent;
         break;
@@ -114,7 +113,7 @@ int CALLBACK DefaultEditWordBreakProc(LPWSTR lpch, int ichCurrent, int cch, int 
         else //if (!iswblank(lpch[ichCurrent]))
         {
             while (ichCurrent < (cch - 1) && !iswspace(lpch[ichCurrent]))
-                ++ichCurrent;
+                ichCurrent = (int) (CharNext(lpch + ichCurrent) - lpch);
         }
         return ichCurrent;
         break;

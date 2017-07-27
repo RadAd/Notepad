@@ -192,9 +192,9 @@ void RadEdit::CalcScrollBars(HWND hWnd) const
     vinfo.fMask |= SIF_DISABLENOSCROLL;
     hinfo.fMask |= SIF_DISABLENOSCROLL;
     vinfo.nMax = s.cy - 1;
-    vinfo.nPage = GetHeight(cr) / LineHeight();
+    vinfo.nPage = GetHeight(cr) / LineHeight() - 1;
     hinfo.nMax = s.cx;
-    hinfo.nPage = GetWidth(cr) / AveCharWidth();
+    hinfo.nPage = GetWidth(cr) / AveCharWidth() - 1;
 
     SetScrollInfo(hWnd, SB_VERT, &vinfo, TRUE);
     SetScrollInfo(hWnd, SB_HORZ, &hinfo, TRUE);
@@ -820,9 +820,10 @@ void RadEdit::OnClear(HWND hWnd)
 void RadEdit::OnSetRedraw(HWND hWnd, BOOL fRedraw)
 {
     // TODO Capture rcPaint during WM_PAINT to reapply here
-    if (fRedraw)
-        RedrawWindow(hWnd, NULL, NULL, RDW_ERASE | RDW_FRAME | RDW_INVALIDATE | RDW_ALLCHILDREN);
     FORWARD_WM_SETREDRAW(hWnd, fRedraw, DefWindowProc);
+    if (fRedraw)
+        //RedrawWindow(hWnd, NULL, NULL, RDW_ERASE | RDW_FRAME | RDW_INVALIDATE | RDW_ALLCHILDREN);
+        InvalidateRect(hWnd, NULL, TRUE);
 }
 
 LRESULT RadEdit::OnGetSel(HWND hWnd, LPDWORD pSelStart, LPDWORD pSelEnd) const
@@ -944,7 +945,7 @@ LRESULT RadEdit::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             if (vinfo.nPos > nLine)
                 vinfo.nPos = nLine;
             else if ((vinfo.nPos + (int) vinfo.nPage) < nLine)
-                vinfo.nPos = nLine - vinfo.nPage + 1;
+                vinfo.nPos = nLine - vinfo.nPage;
 
             SetScrollInfo(hWnd, SB_VERT, &vinfo, TRUE);
             //SetScrollInfo(hWnd, SB_HORZ, &hinfo, TRUE);   // TODO

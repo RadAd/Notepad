@@ -23,8 +23,6 @@
 #include <memory.h>
 #include <tchar.h>
 
-
-// TODO
 #include <assert.h>
 #define ASSERT(x) assert(x)
 #ifdef NDEBUG
