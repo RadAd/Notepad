@@ -148,6 +148,7 @@ public:
     void OnCopy(HWND hWnd);
     void OnPaste(HWND hWnd);
     void OnClear(HWND hWnd);
+    void OnSetRedraw(HWND hwnd, BOOL fRedraw);
 
     LRESULT OnGetSel(HWND hWnd, LPDWORD pSelStart, LPDWORD pSelEnd) const;
     void OnSetSel(HWND hWnd, DWORD nSelStart, DWORD nSelEnd);
@@ -816,6 +817,14 @@ void RadEdit::OnClear(HWND hWnd)
    ReplaceSel(hWnd, L"", TRUE);
 }
 
+void RadEdit::OnSetRedraw(HWND hWnd, BOOL fRedraw)
+{
+    // TODO Capture rcPaint during WM_PAINT to reapply here
+    if (fRedraw)
+        RedrawWindow(hWnd, NULL, NULL, RDW_ERASE | RDW_FRAME | RDW_INVALIDATE | RDW_ALLCHILDREN);
+    FORWARD_WM_SETREDRAW(hWnd, fRedraw, DefWindowProc);
+}
+
 LRESULT RadEdit::OnGetSel(HWND hWnd, LPDWORD pSelStart, LPDWORD pSelEnd) const
 {
     DWORD nStart = min(m_nSelStart, m_nSelEnd);
@@ -885,6 +894,7 @@ LRESULT RadEdit::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     HANDLE_MSG(hWnd, WM_COPY,          OnCopy);
     HANDLE_MSG(hWnd, WM_PASTE,         OnPaste);
     HANDLE_MSG(hWnd, WM_CLEAR,         OnClear);
+    HANDLE_MSG(hWnd, WM_SETREDRAW,     OnSetRedraw);
 
     HANDLE_MSG(hWnd, EM_GETSEL,        OnGetSel);
     HANDLE_MSG(hWnd, EM_SETSEL,        OnSetSel);

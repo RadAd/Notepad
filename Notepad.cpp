@@ -58,8 +58,6 @@ inline DWORD EditGetCursor(HWND hEdit)
     else
         Edit_SetSel(hEdit, nSelStart, nSelend);
     SetWindowRedraw(hEdit, TRUE);
-    // Win32 edit didn't need this, maybe radedit should capture WM_SETREDRAW
-    RedrawWindow(hEdit, NULL, NULL, RDW_ERASE | RDW_FRAME | RDW_INVALIDATE | RDW_ALLCHILDREN);
     return nCursor;
 }
 
