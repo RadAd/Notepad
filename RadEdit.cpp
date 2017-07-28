@@ -164,7 +164,7 @@ private:
 public:
     BOOL OnCreate(HWND hWnd, LPCREATESTRUCT lpCreateStruct);
     void OnDestroy(HWND hWnd);
-    BOOL OnEraseBkgnd(HWND hWnd, HDC hdc);
+    BOOL OnEraseBkgnd(HWND hWnd, HDC hDC);
     void OnPaint(HWND hWnd);
     void OnSize(HWND hWnd, UINT state, int cx, int cy);
     void OnScroll(HWND hWnd, UINT nSBCode, HWND hScrollBar, UINT nBar) const;
@@ -395,13 +395,13 @@ UINT DoScroll(UINT nSBCode, const SCROLLINFO& info)
     case SB_PAGELEFT:    // Scroll one page left.
         if (curpos > info.nMin)
             //curpos = max(info.nMin, curpos - MulDiv(info.nPage, 9, 10));
-            curpos = max(info.nMin, curpos - info.nPage);
+            curpos = max(info.nMin, curpos - (int) info.nPage);
         break;
 
     case SB_PAGERIGHT:      // Scroll one page right.
         if (curpos < info.nMax)
             //curpos = min(info.nMax, curpos + MulDiv(info.nPage, 9, 10));
-            curpos = min(info.nMax, curpos + info.nPage);
+            curpos = min(info.nMax, curpos + (int) info.nPage);
         break;
 
     case SB_THUMBPOSITION:          // Scroll to absolute position. nTrackPos is the position
@@ -418,6 +418,7 @@ UINT DoScroll(UINT nSBCode, const SCROLLINFO& info)
 
 BOOL RadEdit::OnCreate(HWND hWnd, LPCREATESTRUCT lpCreateStruct)
 {
+    lpCreateStruct;
     ASSERT(lpCreateStruct->style & WS_VSCROLL);
     ASSERT(lpCreateStruct->style & WS_HSCROLL);
     ASSERT(lpCreateStruct->style & ES_AUTOVSCROLL);
@@ -429,12 +430,12 @@ BOOL RadEdit::OnCreate(HWND hWnd, LPCREATESTRUCT lpCreateStruct)
     return TRUE;
 }
 
-void RadEdit::OnDestroy(HWND hWGnd)
+void RadEdit::OnDestroy(HWND /*hWnd*/)
 {
    LocalFree(m_hText);
 }
 
-BOOL RadEdit::OnEraseBkgnd(HWND hWnd, HDC hdc)
+BOOL RadEdit::OnEraseBkgnd(HWND /*hWnd*/, HDC /*hDC*/)
 {
    return FALSE;
 }
@@ -468,7 +469,7 @@ void RadEdit::OnPaint(HWND hWnd)
     EndPaint(hWnd, &ps);
 }
 
-void RadEdit::OnSize(HWND hWnd, UINT state, int cx, int cy)
+void RadEdit::OnSize(HWND hWnd, UINT /*state*/, int /*cx*/, int /*cy*/)
 {
    CalcScrollBars(hWnd);
 }
@@ -491,7 +492,7 @@ void RadEdit::OnScroll(HWND hWnd, UINT nSBCode, HWND hScrollBar, UINT nBar) cons
     InvalidateRect(hWnd, nullptr, TRUE);
 }
 
-void RadEdit::OnSetFocus(HWND hWnd, HWND hWndOldFocus)
+void RadEdit::OnSetFocus(HWND hWnd, HWND /*hWndOldFocus*/)
 {
     CreateCaret(hWnd, NULL, 1, m_TextMetrics.tmHeight);
     MoveCaret(hWnd);
@@ -500,7 +501,7 @@ void RadEdit::OnSetFocus(HWND hWnd, HWND hWndOldFocus)
     NotifyParent(hWnd, EN_SETFOCUS);
 }
 
-void RadEdit::OnKillFocus(HWND hWnd, HWND hWndNewFocus)
+void RadEdit::OnKillFocus(HWND hWnd, HWND /*hWndNewFocus*/)
 {
     DestroyCaret();
     InvalidateRect(hWnd, NULL, TRUE);
@@ -534,12 +535,12 @@ void RadEdit::OnSetFont(HWND hWnd, HFONT hFont, BOOL bRedraw)
         InvalidateRect(hWnd, nullptr, TRUE);
 }
 
-HFONT RadEdit::OnGetFont(HWND hWnd) const
+HFONT RadEdit::OnGetFont(HWND /*hWnd*/) const
 {
    return m_hFont;
 }
 
-void RadEdit::OnKey(HWND hWnd, UINT vk, BOOL fDown, int cRepeat, UINT flags)
+void RadEdit::OnKey(HWND hWnd, UINT vk, BOOL fDown, int /*cRepeat*/, UINT /*flags*/)
 {
     if (!fDown)
         return;
@@ -729,7 +730,7 @@ void RadEdit::OnKey(HWND hWnd, UINT vk, BOOL fDown, int cRepeat, UINT flags)
     }
 }
 
-void RadEdit::OnChar(HWND hWnd, TCHAR ch, int cRepeat)
+void RadEdit::OnChar(HWND hWnd, TCHAR ch, int /*cRepeat*/)
 {
     switch (ch)
     {
@@ -793,13 +794,13 @@ void RadEdit::OnLButtonDown(HWND hWnd, BOOL fDoubleClick, int x, int y, UINT key
    SetCapture(hWnd);
 }
 
-void RadEdit::OnLButtonUp(HWND hWnd, int x, int y, UINT keyFlags)
+void RadEdit::OnLButtonUp(HWND /*hWnd*/, int x, int y, UINT /*keyFlags*/)
 {
     POINT point = { x, y };
     ReleaseCapture();
 }
 
-void RadEdit::OnMouseMove(HWND hWnd, int x, int y, UINT keyFlags)
+void RadEdit::OnMouseMove(HWND hWnd, int x, int y, UINT /*keyFlags*/)
 {
     POINT point = { x, y };
     if (GetCapture() == hWnd)
@@ -817,7 +818,7 @@ void RadEdit::OnMouseMove(HWND hWnd, int x, int y, UINT keyFlags)
     }
 }
 
-void RadEdit::OnMouseWheel(HWND hWnd, int xPos, int yPos, int zDelta, UINT fwKeys)
+void RadEdit::OnMouseWheel(HWND hWnd, int /*xPos*/, int /*yPos*/, int zDelta, UINT fwKeys)
 {
     if ((fwKeys & (MK_CONTROL | MK_SHIFT)) == 0)
     {
@@ -826,7 +827,7 @@ void RadEdit::OnMouseWheel(HWND hWnd, int xPos, int yPos, int zDelta, UINT fwKey
     }
 }
 
-void RadEdit::OnContextMenu(HWND hWnd, HWND hWndContext, UINT xPos, UINT yPos)
+void RadEdit::OnContextMenu(HWND hWnd, HWND /*hWndContext*/, UINT xPos, UINT yPos)
 {
     HMODULE hInst = GetWindowInstance(hWnd);
     HMENU hMenu = LoadMenu(hInst, MAKEINTRESOURCE(IDR_RADEDIT));
@@ -842,12 +843,12 @@ void RadEdit::OnContextMenu(HWND hWnd, HWND hWndContext, UINT xPos, UINT yPos)
     DestroyMenu(hMenu);
 }
 
-INT RadEdit::OnGetTextLength(HWND hWnd)
+INT RadEdit::OnGetTextLength(HWND /*hWnd*/)
 {
    return TextLength(m_hText);
 }
 
-INT RadEdit::OnGetText(HWND hWnd, int cchTextMax, LPTSTR lpszText)
+INT RadEdit::OnGetText(HWND /*hWnd*/, int cchTextMax, LPTSTR lpszText)
 {
     PCWSTR const buffer = (PCWSTR) LocalLock(m_hText);
     StrCpyN(lpszText, buffer, cchTextMax);
@@ -856,7 +857,7 @@ INT RadEdit::OnGetText(HWND hWnd, int cchTextMax, LPTSTR lpszText)
     return (INT) wcslen(lpszText);    // TODO capture size when copying
 }
 
-BOOL RadEdit::OnSetText(HWND hWnd, LPCTSTR lpszText)
+BOOL RadEdit::OnSetText(HWND /*hWnd*/, LPCTSTR lpszText)
 {
     HLOCAL hTextNew = TextCreate(lpszText);
     if (hTextNew != NULL)
@@ -928,12 +929,12 @@ void RadEdit::OnSetRedraw(HWND hWnd, BOOL fRedraw)
         //InvalidateRect(hWnd, NULL, TRUE);
 }
 
-UINT RadEdit::OnGetDlgCode(HWND hWnd, LPMSG pMsg)
+UINT RadEdit::OnGetDlgCode(HWND /*hWnd*/, LPMSG /*pMsg*/)
 {
     return DLGC_HASSETSEL | DLGC_WANTALLKEYS | DLGC_WANTARROWS | DLGC_WANTCHARS | DLGC_WANTTAB;
 }
 
-LRESULT RadEdit::OnGetSel(HWND hWnd, LPDWORD pSelStart, LPDWORD pSelEnd) const
+LRESULT RadEdit::OnGetSel(HWND /*hWnd*/, LPDWORD pSelStart, LPDWORD pSelEnd) const
 {
     DWORD nStart = min(m_nSelStart, m_nSelEnd);
     DWORD nEnd = max(m_nSelStart, m_nSelEnd);
@@ -1024,22 +1025,22 @@ void RadEdit::OnScrollCaret(HWND hWnd)
     InvalidateRect(hWnd, nullptr, TRUE);
 }
 
-BOOL RadEdit::OnGetModify(HWND hWnd)
+BOOL RadEdit::OnGetModify(HWND /*hWnd*/)
 {
     return m_bModify;
 }
 
-void RadEdit::OnSetModify(HWND hWnd, BOOL bModify)
+void RadEdit::OnSetModify(HWND /*hWnd*/, BOOL bModify)
 {
     m_bModify = bModify;
 }
 
-DWORD RadEdit::OnGetLineCount(HWND hWnd)
+DWORD RadEdit::OnGetLineCount(HWND /*hWnd*/)
 {
     return TextLineCount(m_hText);
 }
 
-DWORD RadEdit::OnLineIndex(HWND hWnd, int nLine)
+DWORD RadEdit::OnLineIndex(HWND /*hWnd*/, int nLine)
 {
     if (nLine == -1)
         return TextLineStart(m_hText, m_nSelEnd);
@@ -1059,7 +1060,7 @@ void RadEdit::OnSetHandle(HWND hWnd, HLOCAL hText)
     //OnScrollCaret(hWnd);
 }
 
-HLOCAL RadEdit::OnGetHandle(HWND hWnd)
+HLOCAL RadEdit::OnGetHandle(HWND /*hWnd*/)
 {
     return m_hText;
 }
@@ -1069,12 +1070,12 @@ DWORD RadEdit::OnGetThumb(HWND hWnd)
     return MyGetScrollPos(hWnd, SB_VERT);
 }
 
-DWORD RadEdit::OnLineLength(HWND hWnd, int nIndex)
+DWORD RadEdit::OnLineLength(HWND /*hWnd*/, int nIndex)
 {
     // TODO When nIndex == -1
 
     if (nIndex > TextLength(m_hText))
-        return -1;
+        return (DWORD) -1;
 
     const DWORD nLineStart = TextLineStart(m_hText, nIndex);
     const DWORD nLineEnd = TextLineEnd(m_hText, nIndex);
@@ -1087,7 +1088,7 @@ void RadEdit::OnReplaceSel(HWND hWnd, PCWSTR pText, BOOL bStoreUndo)
     ReplaceSel(hWnd, pText, bStoreUndo);
 }
 
-int RadEdit::OnGetLine(HWND hWnd, int nLine, PTCHAR copy, DWORD nBufSize)
+int RadEdit::OnGetLine(HWND /*hWnd*/, int nLine, PTCHAR copy, DWORD nBufSize)
 {
     // TODO Support TCHAR
 
@@ -1102,14 +1103,14 @@ int RadEdit::OnGetLine(HWND hWnd, int nLine, PTCHAR copy, DWORD nBufSize)
     return nLineCount;
 }
 
-DWORD RadEdit::OnLineFromChar(HWND hWnd, int nCharIndex)
+DWORD RadEdit::OnLineFromChar(HWND /*hWnd*/, int nCharIndex)
 {
     if (nCharIndex == -1)
         nCharIndex = m_nSelEnd;
     return TextLineFromChar(m_hText, nCharIndex);
 }
 
-BOOL RadEdit::OnSetTabStops(HWND hWnd, LPINT rgTabStops, int nTabStops)
+BOOL RadEdit::OnSetTabStops(HWND /*hWnd*/, LPINT rgTabStops, int nTabStops)
 {
     m_nTabStops = nTabStops;
     //memcpy(m_rgTabStops, rgTabStops, nTabStops * sizeof(INT));
@@ -1136,17 +1137,17 @@ BOOL RadEdit::OnSetReadOnly(HWND hWnd, BOOL bReadOnly)
     return TRUE;
 }
 
-EDITWORDBREAKPROC RadEdit::OnGetWordBreakProc(HWND hWnd)
+EDITWORDBREAKPROC RadEdit::OnGetWordBreakProc(HWND /*hWnd*/)
 {
     return m_pEditWordBreakProc;
 }
 
-void RadEdit::OnSetWordBreakProc(HWND hWnd, EDITWORDBREAKPROC pEWB)
+void RadEdit::OnSetWordBreakProc(HWND /*hWnd*/, EDITWORDBREAKPROC pEWB)
 {
     m_pEditWordBreakProc = pEWB;
 }
 
-void RadEdit::OnSetMargins(HWND hWnd, UINT nFlags, UINT nLeftMargin, UINT nRightMargin)
+void RadEdit::OnSetMargins(HWND /*hWnd*/, UINT nFlags, UINT nLeftMargin, UINT nRightMargin)
 {
     if (nFlags & EC_LEFTMARGIN)
         m_nMarginLeft = nLeftMargin;
@@ -1154,7 +1155,7 @@ void RadEdit::OnSetMargins(HWND hWnd, UINT nFlags, UINT nLeftMargin, UINT nRight
         m_nMarginRight = nRightMargin;
 }
 
-LRESULT RadEdit::OnGetMargins(HWND hWnd)
+LRESULT RadEdit::OnGetMargins(HWND /*hWnd*/)
 {
     return MAKELRESULT(m_nMarginLeft, m_nMarginRight);
 }

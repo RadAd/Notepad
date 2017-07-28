@@ -50,7 +50,7 @@ inline DWORD EditGetCursor(HWND hEdit)
     SetWindowRedraw(hEdit, FALSE);
     DWORD nSelStart, nSelend;
     EditGetSel(hEdit, &nSelStart, &nSelend);
-    Edit_SetSel(hEdit, -1, -1);
+    Edit_SetSel(hEdit, (DWORD) -1, (DWORD) -1);
     DWORD nCursor;
     EditGetSel(hEdit, &nCursor, nullptr);
     if (nCursor == nSelStart)
@@ -167,10 +167,10 @@ HWND InitInstance(HINSTANCE hInstance, int nCmdShow)
     RegCreateKey(HKEY_CURRENT_USER, TEXT("Software\\RadSoft\\Notepad"), &g_hReg);
 
     RECT r;
-    r.top = RegQueryDWORD(g_hReg, TEXT("iWindowPosY"), CW_USEDEFAULT);
-    r.left = RegQueryDWORD(g_hReg, TEXT("iWindowPosX"), CW_USEDEFAULT);
-    r.bottom = RegQueryDWORD(g_hReg, TEXT("iWindowPosDY"), CW_USEDEFAULT);
-    r.right = RegQueryDWORD(g_hReg, TEXT("iWindowPosDX"), CW_USEDEFAULT);
+    r.top = RegQueryDWORD(g_hReg, TEXT("iWindowPosY"), (DWORD) CW_USEDEFAULT);
+    r.left = RegQueryDWORD(g_hReg, TEXT("iWindowPosX"), (DWORD) CW_USEDEFAULT);
+    r.bottom = RegQueryDWORD(g_hReg, TEXT("iWindowPosDY"), (DWORD) CW_USEDEFAULT);
+    r.right = RegQueryDWORD(g_hReg, TEXT("iWindowPosDX"), (DWORD) CW_USEDEFAULT);
     HWND hWnd = CreateWindowEx(WS_EX_ACCEPTFILES, pszWindowClass, g_szTitle, WS_OVERLAPPEDWINDOW,
         r.left, r.top, r.right, r.bottom, nullptr, nullptr, hInstance, nullptr);
 
@@ -328,7 +328,7 @@ void UpdateCursorInfo(HWND hEdit, HWND hStatus)
     }
 }
 
-LRESULT CALLBACK EditExProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
+LRESULT CALLBACK EditExProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR /*uIdSubclass*/, DWORD_PTR /*dwRefData*/)
 {
     static DWORD nPos = 0;
     LRESULT ret = DefSubclassProc(hWnd, uMsg, wParam, lParam);

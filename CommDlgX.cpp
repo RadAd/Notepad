@@ -27,7 +27,7 @@ BOOL SelectFilename(HWND hWnd, BOOL bLoad, PTCHAR pszFileName, DWORD nMaxSize, E
     TCHAR szFilter[MAX_LOADSTRING];
     LoadString(g_hInst, IDS_FILTER, szFilter, MAX_LOADSTRING);
     PTCHAR pszReplace = szFilter;
-    while (pszReplace = StrChr(pszReplace, TEXT('|')))
+    while ((pszReplace = StrChr(pszReplace, TEXT('|'))) != nullptr)
     {
         *pszReplace = TEXT('\0');
         ++pszReplace;
@@ -78,7 +78,7 @@ BOOL SelectFilename(HWND hWnd, BOOL bLoad, PTCHAR pszFileName, DWORD nMaxSize, E
         const DWORD idCtrlEncoding = 1;
         TCHAR sEncoding[MAX_LOADSTRING];
         LoadString(g_hInst, IDS_ENCODING, sEncoding, MAX_LOADSTRING);
-        pIFileDialogCustomize->StartVisualGroup(-1, sEncoding);
+        pIFileDialogCustomize->StartVisualGroup((DWORD) -1, sEncoding);
         pIFileDialogCustomize->AddComboBox(idCtrlEncoding);
         for (Encoding eEncoding : g_EncodingList)
         {
@@ -93,7 +93,7 @@ BOOL SelectFilename(HWND hWnd, BOOL bLoad, PTCHAR pszFileName, DWORD nMaxSize, E
         if (hr == S_OK)
         {
             IShellItem *psiResult;
-            HRESULT hr = pIFileDialog->GetResult(&psiResult);
+            hr = pIFileDialog->GetResult(&psiResult);
             if (SUCCEEDED(hr))
             {
                 SFGAOF sfgaoAttribs;

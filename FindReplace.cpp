@@ -75,7 +75,7 @@ void OnDlgTerm()
     g_hFind = NULL;
 }
 
-BOOL Find2(HWND hEdit, LPWSTR szTitle, const FINDREPLACEW* pfr)
+BOOL TextFind(HWND hEdit, const FINDREPLACEW* pfr)
 {
     PWCHAR pstrFindWhat = pfr->lpstrFindWhat;
 
@@ -112,7 +112,7 @@ BOOL Find2(HWND hEdit, LPWSTR szTitle, const FINDREPLACEW* pfr)
     return ret;
 }
 
-BOOL Replace2(HWND hEdit, LPWSTR szTitle, const FINDREPLACEW* pfr)
+BOOL TextReplace(HWND hEdit, FINDREPLACEW* pfr)
 {
     PWCHAR pstrFindWhat = pfr->lpstrFindWhat;
     PWCHAR lpstrReplaceWith = pfr->lpstrReplaceWith;
@@ -140,7 +140,7 @@ BOOL Replace2(HWND hEdit, LPWSTR szTitle, const FINDREPLACEW* pfr)
 
     LocalUnlock(hMem);
 
-    return Find2(hEdit, szTitle, pfr);
+    return TextFind(hEdit, pfr);
 }
 
 void ShowFindFailed(LPTSTR szTitle, LPTSTR pstrFindWhat)
@@ -150,24 +150,24 @@ void ShowFindFailed(LPTSTR szTitle, LPTSTR pstrFindWhat)
     MessageBox(g_hFind, sBuffer, szTitle, MB_OK | MB_ICONINFORMATION);
 }
 
-LRESULT OnFindMsg(HWND hEdit, LPTSTR szTitle, WPARAM wParam, LPARAM lParam)
+LRESULT OnFindMsg(HWND hEdit, LPTSTR szTitle, WPARAM /*wParam*/, LPARAM lParam)
 {
     FINDREPLACEW* pfr = (FINDREPLACEW*) lParam;
     if (pfr->Flags & FR_DIALOGTERM)
         OnDlgTerm();
     else if (pfr->Flags & FR_FINDNEXT)
     {
-        if (!Find2(hEdit, szTitle, pfr))
+        if (!TextFind(hEdit, pfr))
             ShowFindFailed(szTitle, pfr->lpstrFindWhat);
     }
     else if (pfr->Flags & FR_REPLACE)
     {
-        if (!Replace2(hEdit, szTitle, pfr))
+        if (!TextReplace(hEdit, pfr))
             ShowFindFailed(szTitle, pfr->lpstrFindWhat);
     }
     else if (pfr->Flags & FR_REPLACEALL)
     {
-        while (!Replace2(hEdit, szTitle, pfr))
+        while (!TextReplace(hEdit, pfr))
             ;
     }
     return 0;
