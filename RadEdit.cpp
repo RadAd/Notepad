@@ -113,6 +113,7 @@ namespace
     }
 }
 
+class RadEdit;
 LRESULT CALLBACK RadEditWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 
 ATOM RegisterRadEdit(HINSTANCE hInstance)
@@ -121,7 +122,7 @@ ATOM RegisterRadEdit(HINSTANCE hInstance)
     wc.style = CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS;
     wc.lpfnWndProc = RadEditWndProc;
     wc.cbClsExtra = 0;
-    wc.cbWndExtra = 0;
+    wc.cbWndExtra = sizeof(RadEdit*);
     wc.hInstance = hInstance;
     wc.hIcon = NULL;
     wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
@@ -1340,12 +1341,12 @@ LRESULT RadEdit::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 LRESULT CALLBACK RadEditWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
-    RadEdit* pData = (RadEdit*) GetWindowLongPtr(hWnd, GWLP_USERDATA);
+    RadEdit* pData = (RadEdit*) GetWindowLongPtr(hWnd, 0);
 
     if (message == WM_CREATE)
     {
         pData = new RadEdit();
-        SetWindowLongPtr(hWnd, GWLP_USERDATA, (LONG_PTR) pData);
+        SetWindowLongPtr(hWnd, 0, (LONG_PTR) pData);
     }
 
     LRESULT ret = pData
@@ -1356,7 +1357,7 @@ LRESULT CALLBACK RadEditWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
     {
         delete pData;
         pData = nullptr;
-        SetWindowLongPtr(hWnd, GWLP_USERDATA, (LONG_PTR) pData);
+        SetWindowLongPtr(hWnd, 0, (LONG_PTR) pData);
     }
 
     return ret;
