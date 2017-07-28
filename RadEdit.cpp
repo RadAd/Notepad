@@ -6,11 +6,13 @@
 #include "resource.h"   // For IDR_RADEDIT
 
 // TODO
+// http://winapi.freetechsecrets.com/win32/WIN32Edit_Control_Default_Message_Pro.htm
 // Undo
 // Check parent notifications EN_*
 // Support IME
 // Support word wrap
 // Support middle mouse click scroll mode
+// Support RTL
 // ES_LEFT, ES_CENTER, ES_RIGHT
 // ES_UPPERCASE, ES_LOWERCASE
 // ES_AUTOVSCROLL, ES_AUTOHSCROLL not set
@@ -80,7 +82,7 @@ namespace
         _In_reads_opt_(nTabPositions) INT *lpnTabStopPositions,
         int x)
     {
-        // TODO Use a binary search method, need to be careful if in the middle of a character
+#if 0
         for (int i = 0; i < chCount; ++i)
         {
             SIZE s = ToSize(GetTabbedTextExtent(hDC, lpString, i, nTabPositions, lpnTabStopPositions));
@@ -88,6 +90,20 @@ namespace
                 return i;
         }
         return chCount;
+#else
+        int l = 0;
+        int r = chCount - 1;
+        while (l < r)
+        {
+            int m = (l + r) / 2; // TODO This can't be in the middle of a sequence
+            SIZE s = ToSize(GetTabbedTextExtent(hDC, lpString, m, nTabPositions, lpnTabStopPositions));
+            if (s.cx < x)
+                l = GetNextChar(lpString, m);
+            else // if (s.cx >= x)
+                r = GetPrevChar(lpString, m);
+        }
+        return l;
+#endif
     }
 
     void NotifyParent(HWND hWnd, int code)

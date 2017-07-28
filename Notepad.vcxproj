@@ -92,7 +92,7 @@
     <ClInclude Include="*.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="*.cpp" Exclude="stdafx.cpp"/>
+    <ClCompile Include="*.cpp" Exclude="stdafx.cpp" />
     <ClCompile Include="stdafx.cpp">
       <PrecompiledHeader>Create</PrecompiledHeader>
     </ClCompile>
