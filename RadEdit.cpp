@@ -3,7 +3,7 @@
 #include "Text.h"
 #include <windowsx.h>
 #include <intsafe.h>
-#include "resource.h"   // For IDR_RADEDIT
+#include "RadEditResource.h"   // For IDR_RADEDIT
 
 // TODO
 // http://winapi.freetechsecrets.com/win32/WIN32Edit_Control_Default_Message_Pro.htm

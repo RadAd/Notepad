@@ -89,7 +89,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="*.h" />
+    <ClInclude Include="RadEditResource.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="*.cpp" Exclude="stdafx.cpp" />
@@ -99,6 +99,7 @@
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Notepad.rc" />
+    <ResourceCompile Include="RadEdit.rc" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="*.ico" />
