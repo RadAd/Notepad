@@ -163,6 +163,8 @@ private:
     DWORD GetFirstVisibleCol(HWND hWnd) const;
 
 public:
+    DWORD GetCursor() const { return m_nSelEnd; }
+
     BOOL OnCreate(HWND hWnd, LPCREATESTRUCT lpCreateStruct);
     void OnDestroy(HWND hWnd);
     BOOL OnEraseBkgnd(HWND hWnd, HDC hDC);
@@ -197,26 +199,26 @@ public:
     LRESULT OnScroll(HWND hWnd, UINT nSBCode);
     LRESULT OnLineScroll(HWND hWnd, int nHScroll, int nVScroll);
     void OnScrollCaret(HWND hWnd);
-    BOOL OnGetModify(HWND hWnd);
+    BOOL OnGetModify(HWND hWnd) const;
     void OnSetModify(HWND hWnd, BOOL bModify);
-    DWORD OnGetLineCount(HWND hWnd);
-    DWORD OnLineIndex(HWND hWnd, int nLine);
+    DWORD OnGetLineCount(HWND hWnd) const;
+    DWORD OnLineIndex(HWND hWnd, int nLine) const;
     void OnSetHandle(HWND hWnd, HLOCAL hText);
-    HLOCAL OnGetHandle(HWND hWnd);
-    DWORD OnGetThumb(HWND hWnd);
-    DWORD OnLineLength(HWND hWnd, int nIndex);
+    HLOCAL OnGetHandle(HWND hWnd) const;
+    DWORD OnGetThumb(HWND hWnd) const;
+    DWORD OnLineLength(HWND hWnd, int nIndex) const;
     void OnReplaceSel(HWND hWnd, PCWSTR pText, BOOL bStoreUndo);
-    int OnGetLine(HWND hWnd, int nLine, PTCHAR copy, DWORD nBufSize);
-    DWORD OnLineFromChar(HWND hWnd, int nCharIndex);
+    int OnGetLine(HWND hWnd, int nLine, PTCHAR copy, DWORD nBufSize) const;
+    DWORD OnLineFromChar(HWND hWnd, int nCharIndex) const;
     BOOL OnSetTabStops(HWND hWnd, LPINT rgTabStops, int nTabStops);
-    DWORD OnGetFirstVisibleLine(HWND hWnd);
+    DWORD OnGetFirstVisibleLine(HWND hWnd) const;
     BOOL OnSetReadOnly(HWND hWnd, BOOL bReadOnly);
-    EDITWORDBREAKPROC OnGetWordBreakProc(HWND hWnd);
+    EDITWORDBREAKPROC OnGetWordBreakProc(HWND hWnd) const;
     void OnSetWordBreakProc(HWND hWnd, EDITWORDBREAKPROC pEWP);
     void OnSetMargins(HWND hWnd, UINT nFlags, UINT nLeftMargin, UINT nRightMargin);
-    LRESULT OnGetMargins(HWND hWnd);
-    POINT OnPosFromChar(HWND hWnd, DWORD nChar);
-    LRESULT OnCharFromPos(HWND hWnd, POINT pos);
+    LRESULT OnGetMargins(HWND hWnd) const;
+    POINT OnPosFromChar(HWND hWnd, DWORD nChar) const;
+    LRESULT OnCharFromPos(HWND hWnd, POINT pos) const;
 
     LRESULT WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 };
@@ -1026,7 +1028,7 @@ void RadEdit::OnScrollCaret(HWND hWnd)
     InvalidateRect(hWnd, nullptr, TRUE);
 }
 
-BOOL RadEdit::OnGetModify(HWND /*hWnd*/)
+BOOL RadEdit::OnGetModify(HWND /*hWnd*/) const
 {
     return m_bModify;
 }
@@ -1036,12 +1038,12 @@ void RadEdit::OnSetModify(HWND /*hWnd*/, BOOL bModify)
     m_bModify = bModify;
 }
 
-DWORD RadEdit::OnGetLineCount(HWND /*hWnd*/)
+DWORD RadEdit::OnGetLineCount(HWND /*hWnd*/) const
 {
     return TextLineCount(m_hText);
 }
 
-DWORD RadEdit::OnLineIndex(HWND /*hWnd*/, int nLine)
+DWORD RadEdit::OnLineIndex(HWND /*hWnd*/, int nLine) const
 {
     if (nLine == -1)
         return TextLineStart(m_hText, m_nSelEnd);
@@ -1061,17 +1063,17 @@ void RadEdit::OnSetHandle(HWND hWnd, HLOCAL hText)
     //OnScrollCaret(hWnd);
 }
 
-HLOCAL RadEdit::OnGetHandle(HWND /*hWnd*/)
+HLOCAL RadEdit::OnGetHandle(HWND /*hWnd*/) const
 {
     return m_hText;
 }
 
-DWORD RadEdit::OnGetThumb(HWND hWnd)
+DWORD RadEdit::OnGetThumb(HWND hWnd) const
 {
     return MyGetScrollPos(hWnd, SB_VERT);
 }
 
-DWORD RadEdit::OnLineLength(HWND /*hWnd*/, int nIndex)
+DWORD RadEdit::OnLineLength(HWND /*hWnd*/, int nIndex) const
 {
     // TODO When nIndex == -1
 
@@ -1089,7 +1091,7 @@ void RadEdit::OnReplaceSel(HWND hWnd, PCWSTR pText, BOOL bStoreUndo)
     ReplaceSel(hWnd, pText, bStoreUndo);
 }
 
-int RadEdit::OnGetLine(HWND /*hWnd*/, int nLine, PTCHAR copy, DWORD nBufSize)
+int RadEdit::OnGetLine(HWND /*hWnd*/, int nLine, PTCHAR copy, DWORD nBufSize) const
 {
     // TODO Support TCHAR
 
@@ -1104,7 +1106,7 @@ int RadEdit::OnGetLine(HWND /*hWnd*/, int nLine, PTCHAR copy, DWORD nBufSize)
     return nLineCount;
 }
 
-DWORD RadEdit::OnLineFromChar(HWND /*hWnd*/, int nCharIndex)
+DWORD RadEdit::OnLineFromChar(HWND /*hWnd*/, int nCharIndex) const
 {
     if (nCharIndex == -1)
         nCharIndex = m_nSelEnd;
@@ -1122,7 +1124,7 @@ BOOL RadEdit::OnSetTabStops(HWND /*hWnd*/, LPINT rgTabStops, int nTabStops)
     return TRUE;
 }
 
-DWORD RadEdit::OnGetFirstVisibleLine(HWND hWnd)
+DWORD RadEdit::OnGetFirstVisibleLine(HWND hWnd) const
 {
     return GetFirstVisibleLine(hWnd);
 }
@@ -1138,7 +1140,7 @@ BOOL RadEdit::OnSetReadOnly(HWND hWnd, BOOL bReadOnly)
     return TRUE;
 }
 
-EDITWORDBREAKPROC RadEdit::OnGetWordBreakProc(HWND /*hWnd*/)
+EDITWORDBREAKPROC RadEdit::OnGetWordBreakProc(HWND /*hWnd*/) const
 {
     return m_pEditWordBreakProc;
 }
@@ -1156,12 +1158,12 @@ void RadEdit::OnSetMargins(HWND /*hWnd*/, UINT nFlags, UINT nLeftMargin, UINT nR
         m_nMarginRight = nRightMargin;
 }
 
-LRESULT RadEdit::OnGetMargins(HWND /*hWnd*/)
+LRESULT RadEdit::OnGetMargins(HWND /*hWnd*/) const
 {
     return MAKELRESULT(m_nMarginLeft, m_nMarginRight);
 }
 
-POINT RadEdit::OnPosFromChar(HWND hWnd, DWORD nChar)
+POINT RadEdit::OnPosFromChar(HWND hWnd, DWORD nChar) const
 {
     const int nLine = TextLineFromChar(m_hText, nChar);
     const DWORD nLineIndex = TextLineStart(m_hText, nChar);
@@ -1183,7 +1185,7 @@ POINT RadEdit::OnPosFromChar(HWND hWnd, DWORD nChar)
     return p;
 }
 
-LRESULT RadEdit::OnCharFromPos(HWND hWnd, POINT pos)
+LRESULT RadEdit::OnCharFromPos(HWND hWnd, POINT pos) const
 {
     const int nFirstLine = GetFirstVisibleLine(hWnd);
     const int nLine = nFirstLine + pos.y / LineHeight();
@@ -1199,7 +1201,7 @@ LRESULT RadEdit::OnCharFromPos(HWND hWnd, POINT pos)
     const DWORD nLineEnd = TextLineEnd(m_hText, nLineIndex);
     const int nCount = nLineEnd - nLineIndex;
     const int x = pos.x + GetFirstVisibleCol(hWnd) * AveCharWidth() - AveCharWidth() / 2 - MarginLeft();
-    const int nCol = x < 0 ? 0 : ::GetTabbedTextExtentEx(hDC, buffer + nLineIndex, nCount, m_nTabStops, m_rgTabStops, x);
+    const int nCol = x < 0 ? 0 : ::GetTabbedTextExtentEx(hDC, buffer + nLineIndex, nCount, m_nTabStops, const_cast<INT*>(m_rgTabStops), x);
     LocalUnlock(m_hText);
     SelectFont(hDC, of);
     ReleaseDC(hWnd, hDC);
@@ -1361,4 +1363,51 @@ LRESULT CALLBACK RadEditWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
     }
 
     return ret;
+}
+
+struct EditData
+{
+    HLOCAL hText;
+    DWORD nUnknown1;
+    DWORD nLimitText;
+    BYTE b[5];
+    DWORD nSelStart;
+    DWORD nSelEnd;
+    DWORD nCursor;
+    BYTE c[156];
+    HFONT hFont; // 192
+};
+
+DWORD EditGetCursor(HWND hEdit)
+{
+#if 0
+    // NOTE There is no message to get the cursor position
+    // This works by unselecting the reselecting
+    SetWindowRedraw(hEdit, FALSE);
+    DWORD nSelStart, nSelend;
+    EditGetSel(hEdit, &nSelStart, &nSelend);
+    Edit_SetSel(hEdit, (DWORD) -1, (DWORD) -1);
+    DWORD nCursor;
+    EditGetSel(hEdit, &nCursor, nullptr);
+    if (nCursor == nSelStart)
+        Edit_SetSel(hEdit, nSelend, nSelStart);
+    else
+        Edit_SetSel(hEdit, nSelStart, nSelend);
+    SetWindowRedraw(hEdit, TRUE);
+    return nCursor;
+#else
+    LONG_PTR p = GetWindowLongPtr(hEdit, 0);
+    const EditData* edp = (EditData*) p;
+    const RadEdit* rep = (RadEdit*) p;
+    HLOCAL hText = Edit_GetHandle(hEdit);
+    if (edp->hText == hText)
+        return edp->nCursor;
+    else if (rep->OnGetHandle(hEdit) == hText)
+        return rep->GetCursor();
+    else
+    {
+        ASSERT(FALSE); // Shouldn't get here
+        return 0;
+    }
+#endif
 }

@@ -17,7 +17,6 @@
 #define MAX_LOADSTRING 128
 
 #define IDC_EDIT			1001
-
 #define IDC_STATUS			1002
 
 // Global Variables:
@@ -29,41 +28,12 @@ TCHAR g_szLineCol[MAX_LOADSTRING] = TEXT("");
 TCHAR g_szFileName[MAX_PATH] = TEXT("");
 Encoding g_Encoding = BOM_ANSI;
 
-inline BOOL EditIsWordWrap(HWND hEdit)
-{
-    DWORD dwStyle = (DWORD) GetWindowLongPtr(hEdit, GWL_STYLE);
-    return (dwStyle & (WS_HSCROLL | ES_AUTOHSCROLL)) == 0;
-}
-
 inline void EditReplaceHandle(HWND hEdit, HLOCAL hMem)
 {
     HLOCAL hOldMem = Edit_GetHandle(hEdit);
     LocalFree(hOldMem);
     Edit_SetHandle(hEdit, hMem);
     InvalidateRect(hEdit, nullptr, TRUE);
-}
-
-inline DWORD EditGetCursor(HWND hEdit)
-{
-    // NOTE There is no message to get the cursor position
-    // This works by unselecting the reselecting
-    SetWindowRedraw(hEdit, FALSE);
-    DWORD nSelStart, nSelend;
-    EditGetSel(hEdit, &nSelStart, &nSelend);
-    Edit_SetSel(hEdit, (DWORD) -1, (DWORD) -1);
-    DWORD nCursor;
-    EditGetSel(hEdit, &nCursor, nullptr);
-    if (nCursor == nSelStart)
-        Edit_SetSel(hEdit, nSelend, nSelStart);
-    else
-        Edit_SetSel(hEdit, nSelStart, nSelend);
-    SetWindowRedraw(hEdit, TRUE);
-    return nCursor;
-}
-
-inline void EditSetLimitText(HWND hEdit, int nSize)
-{
-    SendMessage(hEdit, EM_SETLIMITTEXT, nSize, 0);
 }
 
 inline void StatusSetText(HWND hStatus, BYTE id, WORD nFlags, LPCTSTR pStr)
@@ -309,11 +279,12 @@ BOOL CheckSave(HWND hWnd, HWND hEdit)
 
 void UpdateCursorInfo(HWND hEdit, HWND hStatus)
 {
-    static bool bIn = false;    // Stop infinite loop from EditGetCursor changing selection
-    static DWORD dwOldCursor = 0;
-    if (hStatus != NULL && !bIn)
+    //static bool bIn = false;    // Stop infinite loop from EditGetCursor changing selection
+    static DWORD dwOldCursor = (DWORD) -1;
+    //if (hStatus != NULL && !bIn)
+    if (hStatus != NULL)
     {
-        bIn = true;
+        //bIn = true;
         DWORD dwCursor = EditGetCursor(hEdit);
         if (dwOldCursor != dwCursor)
         {
@@ -324,7 +295,7 @@ void UpdateCursorInfo(HWND hEdit, HWND hStatus)
             _sntprintf_s(sBuffer, ARRAYSIZE(sBuffer), g_szLineCol, dwLine + 1, dwCursor - dwLineIndex + 1);
             StatusSetText(hStatus, 1, 0, sBuffer);
         }
-        bIn = false;
+        //bIn = false;
     }
 }
 
