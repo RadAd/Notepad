@@ -108,6 +108,9 @@
     <Xml Include="manifest.xml" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <PropertyGroup>
+    <RunParam>test.txt</RunParam>
+  </PropertyGroup>
   <Target Name="Run">
     <Exec Command="&quot;$(TargetPath)&quot; $(RunParam)" />
   </Target>
