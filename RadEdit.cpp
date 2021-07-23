@@ -28,6 +28,13 @@
 // ES_PASSWORD
 // balloon tool tip
 
+#define USE_UNISCRIBE
+
+#ifdef USE_UNISCRIBE
+#include <usp10.h>
+#define UTF8_CHARSET             254
+#endif
+
 namespace
 {
     inline LONG GetWidth(const RECT& r)
@@ -75,6 +82,7 @@ namespace
         return info.nPage;
     }
 
+#ifndef USE_UNISCRIBE
     int GetTabbedTextExtentEx(_In_ HDC hDC,
         _In_reads_(chCount) LPCWSTR lpString,
         _In_ int chCount,
@@ -105,6 +113,7 @@ namespace
         return l;
 #endif
     }
+#endif
 
     void NotifyParent(HWND hWnd, int code)
     {
@@ -161,6 +170,21 @@ private:
     void ReplaceSel(HWND hWnd, PCWSTR pText, BOOL bStoreUndo);
     DWORD GetFirstVisibleLine(HWND hWnd) const;
     DWORD GetFirstVisibleCol(HWND hWnd) const;
+
+#ifdef USE_UNISCRIBE
+    HRESULT ScriptStringAnalyse(HDC hDC, PCWSTR buffer, int nCount, _Outptr_result_buffer_(1) SCRIPT_STRING_ANALYSIS* pssa) const
+    {
+        const int glyhs = 2 * nCount + 16;
+
+        SCRIPT_TABDEF tabdef = {};
+        tabdef.cTabStops = m_nTabStops;
+        tabdef.iScale = 4;
+        tabdef.pTabStops = const_cast<LPINT>(m_rgTabStops);
+        tabdef.iTabOrigin = 0;
+
+        return ::ScriptStringAnalyse(hDC, buffer, nCount, glyhs, -1, SSA_FALLBACK | SSA_GLYPHS | SSA_LINK | SSA_TAB, 0, nullptr, nullptr, nullptr, &tabdef, nullptr, pssa);
+    }
+#endif
 
 public:
     DWORD GetCursor() const { return m_nSelEnd; }
@@ -271,7 +295,22 @@ void RadEdit::CalcScrollBars(HWND hWnd) const
 
 SIZE RadEdit::CalcTextSize(HDC hDC, PCWSTR buffer, int nCount) const
 {
+#ifdef USE_UNISCRIBE
+    HRESULT hr;
+
+    SCRIPT_STRING_ANALYSIS ssa = {};
+    hr = ScriptStringAnalyse(hDC, buffer, nCount, &ssa);
+    if (SUCCEEDED(hr))
+    {
+        const SIZE Size = *ScriptString_pSize(ssa);
+        hr = ScriptStringFree(&ssa);
+        return Size;
+    }
+    else
+        return { 0, 0 };
+#else
     return ToSize(GetTabbedTextExtent(hDC, buffer, nCount, m_nTabStops, const_cast<LPINT>(m_rgTabStops)));
+#endif
 }
 
 void RadEdit::MoveCaret(HWND hWnd) const
@@ -296,7 +335,7 @@ void RadEdit::Draw(HWND hWnd, HDC hDC, LPCRECT pr) const
     OnGetSel(hWnd, &nSelStart, &nSelEnd);
 
     POINT p = { -(int) GetFirstVisibleCol(hWnd) * AveCharWidth() + MarginLeft(), 0 };
-    PCWSTR const buffer = (PCWSTR) LocalLock(m_hText);
+    LPCWSTR const buffer = (LPCWSTR) LocalLock(m_hText);
     const int nFirstLine = GetFirstVisibleLine(hWnd);
     const int nStartLine = pr->top / LineHeight();
     p.y += nStartLine * LineHeight();
@@ -305,7 +344,24 @@ void RadEdit::Draw(HWND hWnd, HDC hDC, LPCRECT pr) const
     {
         const int nLineEnd = GetLineEnd(buffer, nIndex);
         const int nCount = nLineEnd - nIndex;
-        TabbedTextOut(hDC, p.x, p.y, buffer + nIndex, nCount, m_nTabStops, m_rgTabStops, MarginLeft());
+#ifdef USE_UNISCRIBE
+        // TODO Create the clipping rect
+
+        HRESULT hr;
+
+        SCRIPT_STRING_ANALYSIS ssa = {};
+        hr = ScriptStringAnalyse(hDC, buffer + nIndex, nCount, &ssa);
+        if (SUCCEEDED(hr))
+        {
+            const DWORD nSelLineStart = bShowSel ? min(max((int) nSelStart, nIndex), nIndex + nCount) - nIndex : 0;
+            const DWORD nSelLineEnd = bShowSel ? min(max((int) nSelEnd, nIndex), nIndex + nCount) - nIndex : 0;
+
+            hr = ScriptStringOut(ssa, p.x, p.y, ETO_OPAQUE, nullptr, nSelLineStart, nSelLineEnd, FALSE);
+            //const SIZE* pSize = ScriptString_pSize(ssa);
+            hr = ScriptStringFree(&ssa);
+        }
+#else
+        TabbedTextOutW(hDC, p.x, p.y, buffer + nIndex, nCount, m_nTabStops, m_rgTabStops, MarginLeft());
 
         if (bShowSel)
         {
@@ -319,10 +375,11 @@ void RadEdit::Draw(HWND hWnd, HDC hDC, LPCRECT pr) const
                 IntersectClipRect(hDC, p.x + sBegin.cx, p.y, p.x + sEnd.cx, p.y + LineHeight());
                 SetBkColor(hDC, GetSysColor(COLOR_HIGHLIGHT));
                 SetTextColor(hDC, GetSysColor(COLOR_HIGHLIGHTTEXT));
-                TabbedTextOut(hDC, p.x, p.y, buffer + nIndex, nCount, m_nTabStops, m_rgTabStops, MarginLeft());
+                TabbedTextOutW(hDC, p.x, p.y, buffer + nIndex, nCount, m_nTabStops, m_rgTabStops, MarginLeft());
                 RestoreDC(hDC, save);
             }
         }
+#endif
 
         nIndex = GetNextLine(buffer, nLineEnd);
         p.y += LineHeight();
@@ -1168,20 +1225,39 @@ POINT RadEdit::OnPosFromChar(HWND hWnd, DWORD nChar) const
     const int nLine = TextLineFromChar(m_hText, nChar);
     const DWORD nLineIndex = TextLineStart(m_hText, nChar);
 
-    SIZE sPos = {};
+    int x = 0;
     {
         HDC hDC = GetWindowDC(hWnd);
         HFONT of = SelectFont(hDC, m_hFont);
         PCWSTR const buffer = (PCWSTR) LocalLock(m_hText);
+#ifdef USE_UNISCRIBE
+        const DWORD nLineEnd = TextLineEnd(m_hText, nLineIndex);
+        const int nCount = nLineEnd - nLineIndex;
+
+        HRESULT hr;
+
+        SCRIPT_STRING_ANALYSIS ssa = {};
+        hr = ScriptStringAnalyse(hDC, buffer + nLineIndex, nCount, &ssa);
+        if (SUCCEEDED(hr))
+        {
+            if (nChar - nLineIndex < nCount)
+                hr = ScriptStringCPtoX(ssa, nChar - nLineIndex, FALSE, &x);
+            else
+                hr = ScriptStringCPtoX(ssa, nChar - nLineIndex - 1, TRUE, &x);
+            hr = ScriptStringFree(&ssa);
+        }
+#else
         int nCount = nChar - nLineIndex;
-        sPos = CalcTextSize(hDC, buffer + nLineIndex, nCount);
+        // TODO When using UniScribe should use ScriptStringCPtoX
+        x = CalcTextSize(hDC, buffer + nLineIndex, nCount).cx;
+#endif
         LocalUnlock(m_hText);
         SelectFont(hDC, of);
         ReleaseDC(hWnd, hDC);
     }
 
     const int nFirstLine = GetFirstVisibleLine(hWnd);
-    POINT p = { sPos.cx - (int) GetFirstVisibleCol(hWnd) * AveCharWidth() + MarginLeft(), (nLine - nFirstLine) * LineHeight() };
+    POINT p = { x - (int) GetFirstVisibleCol(hWnd) * AveCharWidth() + MarginLeft(), (nLine - nFirstLine) * LineHeight() };
     return p;
 }
 
@@ -1200,8 +1276,24 @@ LRESULT RadEdit::OnCharFromPos(HWND hWnd, POINT pos) const
         return MAKELRESULT(TextLength(m_hText), nLine);
     const DWORD nLineEnd = TextLineEnd(m_hText, nLineIndex);
     const int nCount = nLineEnd - nLineIndex;
+#ifdef USE_UNISCRIBE
+    const int x = pos.x + GetFirstVisibleCol(hWnd) * AveCharWidth() - MarginLeft();
+    int nCol = 0;
+    HRESULT hr;
+
+    SCRIPT_STRING_ANALYSIS ssa = {};
+    hr = ScriptStringAnalyse(hDC, buffer + nLineIndex, nCount, &ssa);
+    if (SUCCEEDED(hr))
+    {
+        int nTrailing = 0;
+        hr = ScriptStringXtoCP(ssa, x, &nCol, &nTrailing);
+        nCol += nTrailing;
+        hr = ScriptStringFree(&ssa);
+    }
+#else
     const int x = pos.x + GetFirstVisibleCol(hWnd) * AveCharWidth() - AveCharWidth() / 2 - MarginLeft();
     const int nCol = x < 0 ? 0 : ::GetTabbedTextExtentEx(hDC, buffer + nLineIndex, nCount, m_nTabStops, const_cast<INT*>(m_rgTabStops), x);
+#endif
     LocalUnlock(m_hText);
     SelectFont(hDC, of);
     ReleaseDC(hWnd, hDC);

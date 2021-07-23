@@ -22,12 +22,12 @@
     <ProjectGuid>{05D80974-409D-4B7F-9239-83718EC8F18B}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>Notepad</RootNamespace>
-    <WindowsTargetPlatformVersion>8.1</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
-    <PlatformToolset>v140</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)'=='Release'" Label="Configuration">
@@ -60,7 +60,7 @@
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
-      <AdditionalDependencies>Comctl32.lib;shlwapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>Comctl32.lib;shlwapi.lib;Usp10.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <Manifest>
       <AdditionalManifestFiles>manifest.xml</AdditionalManifestFiles>
@@ -89,7 +89,18 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="CommDlgX.h" />
+    <ClInclude Include="FileIO.h" />
+    <ClInclude Include="FindReplace.h" />
+    <ClInclude Include="Notepad.h" />
+    <ClInclude Include="RadEdit.h" />
     <ClInclude Include="RadEditResource.h" />
+    <ClInclude Include="RegX.h" />
+    <ClInclude Include="resource.h" />
+    <ClInclude Include="stdafx.h" />
+    <ClInclude Include="StringX.h" />
+    <ClInclude Include="targetver.h" />
+    <ClInclude Include="Text.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="*.cpp" Exclude="stdafx.cpp" />

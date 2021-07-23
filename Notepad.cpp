@@ -120,6 +120,8 @@ HWND InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
     g_hInst = hInstance; // Store instance handle in our global variable
 
+    SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+
     INITCOMMONCONTROLSEX icc = {};
     icc.dwSize = sizeof(icc);
     icc.dwICC = ICC_STANDARD_CLASSES | ICC_WIN95_CLASSES | ICC_LINK_CLASS;

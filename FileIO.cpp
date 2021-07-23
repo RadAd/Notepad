@@ -45,36 +45,52 @@ static Encoding CheckBom(PBYTE pData)
 static HLOCAL ConvertMBToWC(HLOCAL hMemMB, PDWORD pdwChars)
 {
     PCHAR mbstr = (PCHAR) LocalLock(hMemMB);
-    size_t Chars = strlen(mbstr) + 1;
+    size_t MBChars = strlen(mbstr) + 1;
 
-    size_t WCSize = Chars * sizeof(WCHAR);
-    HLOCAL hMemWC = LocalAlloc(LMEM_FIXED, WCSize);
+#if 0
+    size_t WChars = MBChars;
+#else
+    size_t WChars = MultiByteToWideChar(CP_UTF8, 0, mbstr, static_cast<int>(MBChars) - 1, nullptr, 0);
+#endif
+    HLOCAL hMemWC = LocalAlloc(LMEM_FIXED, WChars * sizeof(WCHAR));
 
     PWCHAR wcstr = (PWCHAR) LocalLock(hMemWC);
-    mbstowcs_s(&Chars, wcstr, Chars, mbstr, _TRUNCATE);
+#if 0
+    mbstowcs_s(&Chars, wcstr, MBChars, mbstr, _TRUNCATE);
+#else
+    MultiByteToWideChar(CP_UTF8, 0, mbstr, static_cast<int>(MBChars) - 1, wcstr, static_cast<int>(WChars) - 1);
+#endif
     LocalUnlock(hMemWC);
 
     LocalUnlock(hMemMB);
 
-    *pdwChars = (DWORD) Chars - 1;
+    *pdwChars = (DWORD) MBChars - 1;
     return hMemWC;
 }
 
 static HLOCAL ConvertWCToMB(HLOCAL hMemWC, PDWORD pdwChars)
 {
     PCWCHAR wcstr = (PCWCHAR) LocalLock(hMemWC);
-    size_t Chars = wcslen(wcstr) + 1;
+    size_t WChars = wcslen(wcstr) + 1;
 
-    size_t MBSize = Chars * sizeof(CHAR);
-    HLOCAL hMemMB = LocalAlloc(LMEM_FIXED, MBSize);
+#if 0
+    size_t MBChars = WChars;
+#else
+    size_t MBChars = WideCharToMultiByte(CP_UTF8, 0, wcstr, static_cast<int>(WChars) - 1, nullptr, 0, nullptr, nullptr);
+#endif
+    HLOCAL hMemMB = LocalAlloc(LMEM_FIXED, MBChars * sizeof(CHAR));
 
     PCHAR mbstr = (PCHAR) LocalLock(hMemMB);
-    wcstombs_s(&Chars, mbstr, Chars, wcstr, _TRUNCATE);
+#if 0
+    wcstombs_s(&Chars, mbstr, WChars, wcstr, _TRUNCATE);
+#else
+    WideCharToMultiByte(CP_UTF8, 0, wcstr, static_cast<int>(WChars) - 1, mbstr, static_cast<int>(MBChars) - 1, nullptr, nullptr);
+#endif
     LocalUnlock(hMemMB);
 
     LocalUnlock(hMemWC);
 
-    *pdwChars = (DWORD) Chars - 1;
+    *pdwChars = (DWORD) WChars - 1;
     return hMemMB;
 }
 

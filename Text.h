@@ -150,7 +150,7 @@ int GetLineStart(PCWSTR buffer, int nIndex)
 
 int GetLineEnd(PCWSTR buffer, int nIndex)
 {
-    PCWSTR end = StrChr(buffer + nIndex, L'\r'); // TODO Handle different line endings
+    PCWSTR end = StrChr(buffer + nIndex, L'\n'); // TODO Handle different line endings
     return end != nullptr ? static_cast<int>(end - buffer) : nIndex + (int) wcslen(buffer + nIndex);
 }
 
