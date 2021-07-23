@@ -1232,7 +1232,7 @@ POINT RadEdit::OnPosFromChar(HWND hWnd, DWORD nChar) const
         PCWSTR const buffer = (PCWSTR) LocalLock(m_hText);
 #ifdef USE_UNISCRIBE
         const DWORD nLineEnd = TextLineEnd(m_hText, nLineIndex);
-        const int nCount = nLineEnd - nLineIndex;
+        const DWORD nCount = nLineEnd - nLineIndex;
 
         HRESULT hr;
 
