@@ -1,4 +1,4 @@
-Notepad
+<img src="Notepad.ico" width=32/> Notepad
 =======
 
 Reimplementation of Windows Notepad including the edit control
